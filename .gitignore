@@ -1,0 +1,54 @@
+# Python 字节码与解释器缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 项目虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# 测试、覆盖率与工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# 构建与打包产物
+build/
+dist/
+*.egg-info/
+
+# Streamlit 本机密钥（主题配置 config.toml 继续纳入版本控制）
+.streamlit/secrets.toml
+
+# 环境变量与本机凭据
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 日志、运行时与临时文件
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.pid
+ocr_result.txt
+
+# 编辑器与操作系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Office 打开文件时产生的临时副本
+~$*.docx
+~$*.xlsx
+~$*.pptx
