@@ -38,17 +38,13 @@ comp.init_session_state()
 
 # ========================= 侧边栏 =========================
 with st.sidebar:
-    # 顶部标题卡片（仅修改本区域渲染）：两行主标题、水平居中、上下行字号层级；
-    # 卡片圆角/柔和阴影/磨砂颗粒质感由 inject_css 的 .dsh-brand 样式承载（CSS 文件不变），
-    # 内联样式仅用于放大卡片留白与标题排版，保持标题区域无图标、无附属描述。
+    # 顶部品牌区：柔和米白渐变衔接侧栏背景，文字自然换行，不使用功能图标。
     st.markdown(
-        """<div class="dsh-brand" style="min-height:106px; display:flex; flex-direction:column;
-        justify-content:center; align-items:center; gap:.55rem; padding:1.35rem 1.1rem;
-        box-sizing:border-box; overflow:hidden;">
-        <div style="font-size:1.18rem; font-weight:800; color:#2F261F; line-height:1.35;
-        letter-spacing:.02em; white-space:nowrap;">STEM 教师教育</div>
-        <div style="font-size:1.02rem; font-weight:700; color:#2F261F; line-height:1.35;
-        white-space:nowrap;">“教 - 学 - 研” 一体化智能体</div>
+        """<div class="dsh-brand">
+        <div class="dsh-brand-eyebrow">STEM TEACHER EDUCATION</div>
+        <div class="dsh-brand-title">STEM 教师教育</div>
+        <div class="dsh-brand-rule"></div>
+        <div class="dsh-brand-sub"><span>“教 · 学 · 研”</span><span>一体化智能体</span></div>
         </div>""",
         unsafe_allow_html=True,
     )

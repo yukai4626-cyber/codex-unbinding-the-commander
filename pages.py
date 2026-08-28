@@ -555,7 +555,17 @@ def page_overview():
     st.caption(f"版本 {config.VERSION} ｜ 后端 {config.API_BASE}（预留）")
 
   comp.section_title("系统整体架构", "应用层 → 能力层 → 知识图谱底座 → 教-学-研闭环")
-  st.mermaid_chart("""graph TD
+  st.mermaid_chart("""%%{init: {"theme": "base", "themeVariables": {
+  "fontFamily": "Segoe UI, Microsoft YaHei, sans-serif",
+  "primaryColor": "#FDFBF6",
+  "primaryTextColor": "#3A3129",
+  "primaryBorderColor": "#A67C52",
+  "lineColor": "#6F6559",
+  "clusterBkg": "#F1EADF",
+  "clusterBorder": "#C9B18F",
+  "edgeLabelBackground": "#FDFBF6"
+}}}%%
+graph TD
  subgraph APP["应用层 · 四大业务智能体"]
   A1["高保真跨学科教学模拟智能体"]
   A2["因材施教智能教学诊断与反思智能体"]
@@ -583,22 +593,42 @@ def page_overview():
  A3 -->|教学问题转化| A4
  A4 -->|研究成果沉淀| KG
  KG -->|图谱驱动仿真| A1
+ classDef appNode fill:#FDFBF6,stroke:#8C6E4A,color:#3A3129,stroke-width:1.8px
+ classDef capNode fill:#E8DFCF,stroke:#A67C52,color:#3A3129,stroke-width:1.8px
+ classDef kgNode fill:#F6EDDF,stroke:#C9B18F,color:#3A3129,stroke-width:1.8px
+ class A1,A2,A3,A4 appNode
+ class C1,C2,C3,C4,C5 capNode
+ class K1,K2,K3,K4,K5,K6 kgNode
+ style APP fill:#F4F0E8,stroke:#C9B18F,color:#3A3129,stroke-width:1px
+ style CAP fill:#EEE5D8,stroke:#C9B18F,color:#3A3129,stroke-width:1px
+ style KG fill:#F4F0E8,stroke:#C9B18F,color:#3A3129,stroke-width:1px
+ linkStyle default stroke:#6F6559,stroke-width:1.4px,color:#3A3129
 """)
 
   comp.section_title("四大核心能力", "点击卡片下方按钮可直接跳转体验")
   cols = st.columns(4)
+  agent_tones = ["#A67C52", "#6F8A68", "#B56E55", "#B59A55"]
   for i, ag in enumerate(config.AGENTS):
     with cols[i]:
       agent_name = comp.safe_text(ag["name"])
       lines = [comp.safe_text(b) for b in ag["breakthroughs"]]
       advantage = comp.safe_text(ag["advantage"])
+      tone = agent_tones[i]
       st.markdown(
-        f"""<div class="dsh-info" style="min-height:330px;">
-        <div class="dsh-info-title">{comp.icon(ag["icon"], 18, config.COLORS["primary"])}
-        <span style="border-left:3px solid {config.COLORS['primary']}; padding-left:.5rem;">{agent_name}</span></div>
-        {''.join(f'<div class="dsh-info-line" style="font-size:.79rem;">{l}</div>' for l in lines)}
-        <div style="font-size:.78rem; color:#f0f0f2; background:rgba(255,255,255,0.06); border-radius:8px; padding:.5rem .6rem; margin-top:.5rem; line-height:1.55;">
-         {advantage}</div></div>""",
+        f"""<div class="dsh-agent-card" style="--agent-accent:{tone};">
+        <div class="dsh-agent-top">
+          <div class="dsh-agent-icon">{comp.icon(ag["icon"], 19, tone)}</div>
+          <span class="dsh-agent-index">CORE 0{i + 1}</span>
+        </div>
+        <div class="dsh-agent-title">{agent_name}</div>
+        <div class="dsh-agent-kicker">核心突破</div>
+        <div class="dsh-agent-list">
+          {''.join(f'<div class="dsh-agent-feature">{line}</div>' for line in lines)}
+        </div>
+        <div class="dsh-agent-value">
+          <div class="dsh-agent-value-label">差异化价值</div>
+          <div class="dsh-agent-value-text">{advantage}</div>
+        </div></div>""",
         unsafe_allow_html=True,
       )
       st.button(
@@ -630,11 +660,11 @@ def _start_simulation():
 def page_simulation():
   comp.page_header("mic", "跨学科教学模拟实训", "高保真跨学科教学模拟智能体", "教学模拟")
 
-  st.session_state.setdefault("sim_teacher_input", "")
-  if "sim_teacher_initialized" not in st.session_state:
-    if not st.session_state["sim_teacher_input"]:
-      st.session_state["sim_teacher_input"] = TEACHER_INPUT_DEMO
-    st.session_state["sim_teacher_initialized"] = True
+  # Streamlit 会在控件离开页面后清理对应 key；返回模拟页时恢复演示授课文本。
+  # 用户在当前页面主动清空输入时 key 仍存在，因此不会被这里强制覆盖。
+  if not st.session_state.get("sim_teacher_input"):
+    st.session_state["sim_teacher_input"] = TEACHER_INPUT_DEMO
+  st.session_state["sim_teacher_initialized"] = True
   st.session_state.setdefault("sim_theme", SIM_THEMES[0])
 
   left, mid, right = st.columns([1.05, 1.55, 1.3])
@@ -1302,10 +1332,10 @@ def page_research():
   st.session_state.setdefault("research_input_source", "独立输入")
   st.session_state.setdefault("research_generated_source", "")
   st.session_state.setdefault("research_imported_pain", "")
-  if "research_pain_initialized" not in st.session_state:
-    if not st.session_state.get("research_pain"):
-      st.session_state["research_pain"] = DEFAULT_RESEARCH_PAIN
-    st.session_state["research_pain_initialized"] = True
+  # 返回本页时，Streamlit 可能已清理文本控件 key；恢复内置教学痛点样例。
+  if not st.session_state.get("research_pain"):
+    st.session_state["research_pain"] = DEFAULT_RESEARCH_PAIN
+  st.session_state["research_pain_initialized"] = True
 
   with st.container(border=True):
     comp.section_title("教学痛点输入", "课堂数据归因分析 · 图谱关联科研方法子域")
@@ -1453,7 +1483,7 @@ def page_kg():
     comp.render_kg(data["nodes"], data["edges"], height=560, key="kg_main")
 
   comp.section_title(" 节点详情", "下拉选择节点，等价于画布点击")
-  comp.node_detail_panel(data["nodes"], data["edges"])
+  comp.node_detail_panel(data["nodes"], data["edges"], key=f"kg_node_detail_{domain}")
 
 
 # =====================================================================

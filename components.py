@@ -143,16 +143,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible,
 [data-testid="stSidebar"] [role="radiogroup"] label {
   position:relative; display:flex; align-items:center;
   width:100%; min-width:0; height:44px; min-height:44px; max-height:44px;
-  box-sizing:border-box; padding:0 12px; margin:0 !important;
-  border:1px solid #00000014; border-radius:8px;
-  background-color: #ffffffd9; background-image: var(--noise);
-  box-shadow: 0 2px 6px #0000000d;
+  box-sizing:border-box; padding:0 9px 0 13px; margin:0 !important;
+  border:0; border-radius:6px;
+  background:transparent;
+  box-shadow:none;
   transition: all .22s var(--ease-out-quint); cursor:pointer;
 }
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-  transform:translateY(-1px); box-shadow:0 4px 12px #00000014;
+  transform:none; background:rgba(255,255,255,.28); box-shadow:none;
 }
-[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child { display:none !important; }
+[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child,
+[data-testid="stSidebar"] [role="radiogroup"] label input[type="radio"] { display:none !important; }
+[data-testid="stSidebar"] [role="radiogroup"] label > div > div > div:first-child { display:none !important; }
+[data-testid="stSidebar"] [role="radiogroup"] label > div > div { gap:0 !important; }
 [data-testid="stSidebar"] [role="radiogroup"] label > div:nth-child(2) {
   flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
   font-size:.86rem; font-weight:600; color:#4A3D31; line-height:1.35;
@@ -162,25 +165,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible,
   overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
 }
 [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
-  transform:none; border-color:transparent;
-  background-color:#A67C522E; background-image: var(--noise);
-  box-shadow: inset 3px 0 0 var(--primary), 0 4px 12px #00000010;
+  transform:none; border:0;
+  background:linear-gradient(90deg, rgba(166,124,82,.20), rgba(166,124,82,.07) 68%, transparent);
+  box-shadow:none;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::before {
+  content:""; position:absolute; left:0; top:9px; bottom:9px; width:3px;
+  border-radius:999px; background:#8C6E4A;
 }
 [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) div,
 [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p { color:#2F261F !important; font-weight:700; }
 
 /* ★演示主线 标记：右上角蓝色标签 */
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"]) > div:nth-child(2) { padding-right:74px; }
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"])::after {
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"]) > div:nth-child(2),
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="3"]) > div:nth-child(2) { padding-right:72px; }
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"])::after,
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="3"])::after {
   content:"★ 演示主线";
   position:absolute; top:50%; right:10px; transform:translateY(-50%);
-  background:var(--primary); color:#ffffff;
+  background:transparent; color:#8C6E4A;
   font-size:.6rem; font-weight:800; letter-spacing:.02em;
-  padding:2px 7px; border-radius:6px; white-space:nowrap;
-  box-shadow:0 2px 5px rgba(0,120,212,.30);
+  padding:0; border-radius:0; white-space:nowrap;
+  box-shadow:none;
 }
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"]):has(input:checked)::after {
-  background:var(--primary-hover); color:#fff; box-shadow:none;
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"]):has(input:checked)::after,
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="3"]):has(input:checked)::after {
+  background:transparent; color:#6E5033; box-shadow:none;
 }
 
 /* ---------- 页头 / 区块标题（深色块 · 白色标题） ---------- */
@@ -265,6 +275,96 @@ button:focus-visible, input:focus-visible, textarea:focus-visible,
 .dsh-info-title { font-weight:800; color:var(--title); margin-bottom:.5rem; display:flex; gap:.5rem; align-items:center; }
 .dsh-info-line { font-size:.85rem; color:var(--text2); line-height:1.7; margin-bottom:.2rem; }
 .dsh-info-line b { color:var(--text1); }
+
+/* ---------- 首页 · 四大核心能力（等高响应式卡片） ---------- */
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) {
+  align-items:stretch; gap:1rem;
+}
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) > [data-testid="stColumn"] {
+  display:flex; min-width:0;
+}
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) > [data-testid="stColumn"] > div {
+  width:100%; height:100%;
+}
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) [data-testid="stVerticalBlock"] {
+  height:100%; display:flex; flex-direction:column;
+}
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) [data-testid="stElementContainer"]:has(.dsh-agent-card) {
+  flex:1; display:flex;
+}
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) [data-testid="stMarkdownContainer"]:has(.dsh-agent-card) {
+  width:100%; height:100%;
+}
+.dsh-agent-card {
+  --agent-accent:#A67C52;
+  position:relative; overflow:hidden; box-sizing:border-box; height:680px; min-height:680px;
+  display:flex; flex-direction:column; gap:0;
+  padding:1.15rem 1.05rem 1rem;
+  background:linear-gradient(160deg, rgba(50,54,64,.96), rgba(34,38,48,.90));
+  border:1px solid rgba(255,255,255,.11); border-top:3px solid var(--agent-accent);
+  border-radius:14px; box-shadow:var(--surface-shadow);
+  transition:transform .22s var(--ease-out-quint), box-shadow .22s var(--ease-out-quint), border-color .22s var(--ease-out-quint);
+  animation:dshFadeIn .5s var(--ease-out-quint) backwards;
+}
+.dsh-agent-card::after {
+  content:""; position:absolute; width:150px; height:150px; right:-82px; top:-88px;
+  border-radius:50%; background:color-mix(in srgb, var(--agent-accent) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--agent-accent) 26%, transparent); pointer-events:none;
+}
+.dsh-agent-card:hover {
+  transform:translateY(-3px); border-color:color-mix(in srgb, var(--agent-accent) 48%, rgba(255,255,255,.10));
+  box-shadow:0 12px 30px rgba(35,27,20,.18);
+}
+.dsh-agent-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:.85rem; }
+.dsh-agent-icon {
+  width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+  color:var(--agent-accent); background:color-mix(in srgb, var(--agent-accent) 13%, transparent);
+  border:1px solid color-mix(in srgb, var(--agent-accent) 32%, transparent); border-radius:9px;
+}
+.dsh-agent-index { color:var(--agent-accent); font-size:.68rem; font-weight:800; letter-spacing:.12em; }
+.dsh-agent-title {
+  min-height:3.3rem; color:#fff; font-size:1rem; font-weight:800; line-height:1.55;
+  letter-spacing:-.01em; padding-bottom:.85rem; margin-bottom:.8rem;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+.dsh-agent-kicker {
+  color:var(--agent-accent); font-size:.68rem; font-weight:800; letter-spacing:.12em;
+  margin-bottom:.35rem;
+}
+.dsh-agent-list { display:flex; flex-direction:column; gap:.15rem; }
+.dsh-agent-feature {
+  position:relative; padding:.52rem 0 .52rem .85rem;
+  color:#F0F0F2; font-size:.77rem; line-height:1.65;
+  border-bottom:1px solid rgba(255,255,255,.075);
+}
+.dsh-agent-feature::before {
+  content:""; position:absolute; left:0; top:1rem; width:5px; height:5px;
+  border-radius:50%; background:var(--agent-accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--agent-accent) 12%, transparent);
+}
+.dsh-agent-value {
+  margin-top:auto; padding:.78rem .82rem; border-radius:9px;
+  background:color-mix(in srgb, var(--agent-accent) 10%, rgba(255,255,255,.035));
+  border:1px solid color-mix(in srgb, var(--agent-accent) 26%, rgba(255,255,255,.06));
+}
+.dsh-agent-value-label { color:var(--agent-accent); font-size:.67rem; font-weight:800; letter-spacing:.1em; margin-bottom:.3rem; }
+.dsh-agent-value-text { color:#F0F0F2; font-size:.74rem; line-height:1.6; }
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) .stButton { margin-top:.25rem; }
+[data-testid="stHorizontalBlock"]:has(.dsh-agent-card) .stButton > button {
+  border-color:color-mix(in srgb, #A67C52 68%, transparent) !important;
+}
+
+@media (max-width: 1200px) {
+  [data-testid="stHorizontalBlock"]:has(.dsh-agent-card) {
+    display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1rem;
+  }
+  [data-testid="stHorizontalBlock"]:has(.dsh-agent-card) > [data-testid="stColumn"] {
+    width:100% !important; flex:none !important;
+  }
+}
+@media (max-width: 700px) {
+  [data-testid="stHorizontalBlock"]:has(.dsh-agent-card) { grid-template-columns:1fr; }
+  .dsh-agent-card { height:auto; min-height:0; }
+}
 
 .dsh-tag {
   display:inline-block; padding:.14rem .6rem; border-radius:999px;
@@ -386,6 +486,12 @@ footer { visibility:hidden; }
   .dsh-hero { align-items:flex-start; padding:1rem 1.05rem; gap:.8rem; }
   .dsh-hero-tag { margin-left:0; }
   .dsh-hero::after { opacity:.55; }
+  [data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"]) > div:nth-child(2),
+  [data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="3"]) > div:nth-child(2) { padding-right:24px; }
+  [data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="04"])::after,
+  [data-testid="stSidebar"] [role="radiogroup"] label:has(input[value="3"])::after {
+    content:"★"; right:6px;
+  }
 }
 @media (max-width: 640px) {
   [data-testid="stMainBlockContainer"] { padding-left:.75rem; padding-right:.75rem; }
@@ -402,12 +508,38 @@ footer { visibility:hidden; }
 
 /* ---------- 侧边栏品牌区 / 徽章（米色纸感） ---------- */
 .dsh-brand {
-  background-color:#ffffffd9; background-image:var(--noise);
-  border:1px solid #00000014; border-radius:10px; padding:.85rem .9rem; margin-bottom:.25rem;
-  box-shadow:0 2px 6px #0000000d;
+  position:relative; overflow:hidden; box-sizing:border-box; text-align:center;
+  background-color:rgba(248,244,236,.76);
+  background-image:linear-gradient(145deg, rgba(255,255,255,.64), rgba(232,223,207,.42)), var(--noise);
+  border:1px solid rgba(140,110,74,.18); border-radius:14px;
+  padding:1.15rem .8rem 1.05rem; margin:.1rem 0 .35rem;
+  box-shadow:0 8px 24px rgba(74,61,49,.09), inset 0 1px 0 rgba(255,255,255,.72);
 }
-.dsh-brand-title { font-size:.98rem; font-weight:800; color:#2F261F; }
-.dsh-brand-sub { font-size:.73rem; color:#4A3D31; margin-top:.3rem; line-height:1.55; }
+.dsh-brand::before {
+  content:""; position:absolute; left:34%; right:34%; top:0; height:3px;
+  border-radius:0 0 4px 4px; background:linear-gradient(90deg, #C9B18F, #8C6E4A, #C9B18F);
+}
+.dsh-brand::after {
+  content:""; position:absolute; width:110px; height:110px; right:-72px; bottom:-76px;
+  border-radius:50%; border:1px solid rgba(140,110,74,.12);
+  box-shadow:0 0 0 20px rgba(166,124,82,.025); pointer-events:none;
+}
+.dsh-brand-eyebrow {
+  position:relative; z-index:1; color:#8C6E4A; font-size:.56rem; font-weight:800;
+  letter-spacing:.14em; line-height:1.3; margin-bottom:.45rem;
+}
+.dsh-brand-title {
+  position:relative; z-index:1; color:#30261E; font-size:1.04rem; font-weight:800;
+  letter-spacing:.025em; line-height:1.35;
+}
+.dsh-brand-rule {
+  position:relative; z-index:1; width:32px; height:1px; margin:.58rem auto .52rem;
+  background:linear-gradient(90deg, transparent, rgba(140,110,74,.75), transparent);
+}
+.dsh-brand-sub {
+  position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:.12rem;
+  color:#58483A; font-size:.78rem; font-weight:700; line-height:1.5; letter-spacing:.015em;
+}
 .dsh-badge {
   display:inline-flex; align-items:center; gap:.4rem; padding:.28rem .75rem;
   border-radius:8px; font-size:.74rem; font-weight:700;
@@ -758,12 +890,12 @@ def _label_of(nodes, node_id):
     return node_id
 
 
-def node_detail_panel(nodes, edges):
+def node_detail_panel(nodes, edges, key="kg_node_detail"):
     """通过下拉选择器实现“节点点击查看详情”的等价交互。"""
     if not nodes:
         return
     options = [f'{n["label"]} · {n.get("type", "")}' for n in nodes]
-    choice = st.selectbox("选择节点查看详情（等价于画布点击）", options, index=0)
+    choice = st.selectbox("选择节点查看详情（等价于画布点击）", options, index=0, key=key)
     idx = options.index(choice)
     node = nodes[idx]
 
