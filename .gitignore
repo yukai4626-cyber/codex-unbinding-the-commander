@@ -13,14 +13,23 @@ ENV/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
+.hypothesis/
+.cache/
 .coverage
 .coverage.*
 htmlcov/
+coverage.xml
+pytest.xml
 
 # 构建与打包产物
 build/
 dist/
 *.egg-info/
+*.egg
+.eggs/
+wheelhouse/
 
 # Streamlit 本机密钥（主题配置 config.toml 继续纳入版本控制）
 .streamlit/secrets.toml
@@ -38,6 +47,8 @@ dist/
 *.temp
 *.bak
 *.swp
+*.swo
+*~
 *.pid
 ocr_result.txt
 
