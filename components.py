@@ -594,6 +594,7 @@ def init_session_state():
             "待强化：工程实践维度（70%）建议增加“光伏方案原型搭建”环节。"
         ),
         "ws_design_context": None,               # 生成时的学段 / 主题 / 课时快照
+        "ws_agent_result": None,                 # 统一接口最近一次真实回答与来源
         # ---- 教学模拟实训 ----
         "sim_started": False,
         "sim_round": 0,                          # 互动轮次（驱动确定性数值变化）
@@ -601,6 +602,7 @@ def init_session_state():
         "flow_status": "",                       # 自适应状态文案（后端 /status 可覆盖）
         "sim_feedback": None,                    # 后端返回的虚拟学生反馈（None=用内置话术池）
         "sim_signals": None,                     # 后端返回的多模态信号（None=本地计算）
+        "sim_agent_result": None,                # 统一接口原始回答与可选来源
         "sim_teacher_input": "",                # 工作台传入的可编辑授课片段
         # ---- 智能诊断 ----
         "diag_ready": False,
@@ -745,6 +747,9 @@ def backend_badge():
     elif status[0] == "bad_response":
         html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#D13438; border:1px solid #00000014;">'
                 f'后端响应异常（{safe_text(status[1])}）· 已回退 Mock</span>')
+    elif status[0] == "bad_request":
+        html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#D13438; border:1px solid #00000014;">'
+                '前端请求格式异常 · 已回退 Mock</span>')
     else:
         html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#7D630C; border:1px solid #00000014;">'
                 '后端不可用 · 已回退 Mock 兜底</span>')
@@ -759,7 +764,7 @@ def flow_dashboard(flow, status=None):
 
     flow: dict(load=认知负荷, engage=课堂参与度, confuse=学生困惑度, flow=综合心流指数)
     status: 可选，后端返回的自适应状态文案；缺省时按心流指数区间自动生成。
-    真实模式下 flow 由 /api/sim/flow 返回；Mock 模式下使用确定性内置数值。
+    统一接口只返回文本 answer；心流数值由前端演示模型生成，真实回答用于课堂建议。
     """
     bars = [
         ("认知负荷", flow["load"], "#8C6E4A", "越低越从容"),
@@ -1184,29 +1189,42 @@ def _clean_research_response(data, mock_result):
     return cleaned, issues
 
 
-def _clean_endpoint_response(endpoint: str, data: dict, mock_result, payload):
-    cleaners = {
-        config.API_ENDPOINTS["sim_flow"]: lambda: _clean_flow_response(data, mock_result),
-        config.API_ENDPOINTS["diag_report"]: lambda: _clean_diag_response(data, mock_result),
-        config.API_ENDPOINTS["workbench_design"]: lambda: _clean_workbench_response(
-            data, mock_result, payload
-        ),
-        config.API_ENDPOINTS["research_plan"]: lambda: _clean_research_response(data, mock_result),
-    }
-    cleaner = cleaners.get(endpoint)
-    if cleaner is None:
-        return data, []
-    return cleaner()
+def _clean_agent_sources(value):
+    """兼容未来的 sources / graph_sources；仅接收数组，不猜测内部结构。"""
+    return copy.deepcopy(value) if isinstance(value, list) else []
+
+
+def _clean_agent_chat_response(data: dict, payload: dict):
+    """清洗 POST /api/agent-chat 的稳定返回契约。"""
+    answer = data.get("answer")
+    actual_type = data.get("agent_type")
+    expected_type = payload.get("agent_type")
+    issues = []
+    if not _valid_text(answer):
+        issues.append("answer")
+    if not _valid_text(actual_type):
+        issues.append("agent_type")
+    elif actual_type != expected_type:
+        issues.append("agent_type mismatch")
+    if issues:
+        return None, issues
+    return {
+        "answer": answer.strip(),
+        "agent_type": actual_type,
+        "sources": _clean_agent_sources(data.get("sources")),
+        "graph_sources": _clean_agent_sources(data.get("graph_sources")),
+        "_real_response": True,
+    }, []
 
 
 def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"):
-    """统一接口网关（契约见《API接口文档.md》）。
+    """统一智能体接口网关（契约见《STEM教师教育智能体前端接口说明.docx》）。
 
     MOCK_MODE=True  → 直接返回预置 Mock 数据（mock_result），不发起网络请求；
-    MOCK_MODE=False → 请求 config.API_BASE + endpoint：
-                      成功（HTTP 2xx 且 JSON 对象）→ 按接口契约清洗；
-                      缺失 / 非法字段          → 仅用 Mock 补齐该字段；
-                      失败 / 超时 / 异常      → 整体回退 mock_result。
+    MOCK_MODE=False → POST config.API_BASE + /api/agent-chat：
+                      请求仅发送 question + agent_type；
+                      成功返回 answer + agent_type，并兼容可选来源字段；
+                      失败 / 超时 / 契约异常时整体回退 mock_result。
 
     可选 config.API_TOKEN 通过 X-Token 请求头发送，不写入状态详情或日志。
     """
@@ -1214,12 +1232,25 @@ def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"
         _set_backend_status("mock", "内置示例")
         return _mock_copy(mock_result)
 
+    payload = payload if isinstance(payload, dict) else {}
+    question = payload.get("question")
+    agent_type = payload.get("agent_type")
+    allowed_types = set(config.AGENT_TYPES.values())
+    if not _valid_text(question) or agent_type not in allowed_types:
+        _set_backend_status("bad_request", "前端请求格式错误")
+        return _mock_copy(mock_result)
+
+    request_body = {
+        "question": question.strip(),
+        "agent_type": agent_type,
+    }
     url = f"{config.API_BASE.rstrip('/')}/{endpoint.lstrip('/')}"
-    request_kwargs = {"json": payload or {}, "timeout": config.API_TIMEOUT}
+    request_kwargs = {"json": request_body, "timeout": config.API_TIMEOUT}
     if config.API_TOKEN:
         request_kwargs["headers"] = {"X-Token": config.API_TOKEN}
     try:
-        resp = requests.request(method, url, **request_kwargs)
+        with st.spinner("智能体正在检索知识并生成回答……"):
+            resp = requests.request(method, url, **request_kwargs)
     except requests.exceptions.RequestException as e:
         _set_backend_status("down", type(e).__name__)
         return _mock_copy(mock_result)
@@ -1241,15 +1272,25 @@ def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"
         _set_backend_status("bad_response", f"HTTP {resp.status_code} · 业务错误")
         return _mock_copy(mock_result)
 
-    cleaned, issues = _clean_endpoint_response(endpoint, data, mock_result, payload or {})
+    cleaned, issues = _clean_agent_chat_response(data, request_body)
     if issues:
         summary = ", ".join(dict.fromkeys(issues))
         if len(summary) > 100:
             summary = summary[:97] + "..."
-        _set_backend_status("bad_response", f"HTTP {resp.status_code} · Mock 补齐 {summary}")
-    else:
-        _set_backend_status("ok", f"HTTP {resp.status_code}")
+        _set_backend_status("bad_response", f"HTTP {resp.status_code} · 契约字段异常 {summary}")
+        return _mock_copy(mock_result)
+    _set_backend_status("ok", f"HTTP {resp.status_code}")
     return cleaned
+
+
+def is_agent_response(result) -> bool:
+    """判断是否为统一真实后端返回，便于页面适配文本型 answer。"""
+    return (
+        isinstance(result, dict)
+        and result.get("_real_response") is True
+        and _valid_text(result.get("answer"))
+        and result.get("agent_type") in set(config.AGENT_TYPES.values())
+    )
 
 
 def is_mock_off(result) -> bool:

@@ -4,7 +4,7 @@
 > 定位：可独立演示、可连接真实后端的 Streamlit 前端联调原型  
 > 依赖约束：禁止新增第三方库；HTTP 请求使用 Streamlit 已依赖的 `requests`
 
-本项目包含 7 个页面和 4 个正式业务接口。没有后端时可使用内置 Mock 数据完整演示；后端可用时，可通过环境变量切换到真实接口，单个接口失败会自动回退对应 Mock 数据。
+本项目包含 7 个页面、1 个稳定业务接口和 4 种智能体类型。没有后端时可使用内置 Mock 数据完整演示；后端可用时，可通过环境变量切换到真实接口，请求失败会自动回退对应 Mock 数据。
 
 ---
 
@@ -25,7 +25,7 @@ streamlit run app.py --server.port 8502
 
 ```powershell
 $env:STEM_MOCK_MODE = "false"
-$env:STEM_API_BASE = "http://127.0.0.1:8000"
+$env:STEM_API_BASE = "https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run"
 $env:STEM_API_TOKEN = "测试令牌"
 streamlit run app.py --server.port 8502
 ```
@@ -33,7 +33,7 @@ streamlit run app.py --server.port 8502
 | 环境变量 | 是否必填 | 说明 |
 |---|---|---|
 | `STEM_MOCK_MODE` | 否 | `true` 使用内置 Mock；`false` 请求真实后端；未设置时使用 `config.py` 默认值 |
-| `STEM_API_BASE` | 否 | 后端基础地址，例如 `http://127.0.0.1:8000` |
+| `STEM_API_BASE` | 否 | 后端基础地址；默认使用当前测试部署地址，不包含 `/api/agent-chat` |
 | `STEM_API_TOKEN` | 否 | 测试令牌；设置后通过请求头 `X-Token` 发送，未设置时不发送该请求头 |
 
 令牌不得写入源码、提交记录、截图或公开日志。公网部署时应使用平台 Secrets/环境变量，并配置后端 HTTPS 地址。
@@ -81,12 +81,14 @@ streamlit run app.py --server.port 8502
 
 ## 四、正式接口
 
-| 页面 | 接口 | 主要返回内容 |
+四个业务页面统一调用 `POST /api/agent-chat`，请求 Body 仅包含 `question` 和 `agent_type`。
+
+| 页面 | agent_type | answer 的页面用途 |
 |---|---|---|
-| 教学模拟 | `POST /api/sim/flow` | 心流指标、状态、虚拟学生反馈和多模态信号 |
-| 智能诊断 | `POST /api/diag/report` | 问题、归因、建议和溯源子图 |
-| 课程工作台 | `POST /api/workbench/design` | 三步阶段、完整教案、ITRS/STEM 评估和结论 |
-| 科研孵化 | `POST /api/research/plan` | 研究选题、综述提纲、问卷和实验设计 |
+| 教学模拟 | `learning_support` | 本轮课堂互动与学习支持建议 |
+| 智能诊断 | `classroom_diagnosis` | 课堂诊断结论与改进建议 |
+| 课程工作台 | `lesson_design` | 完整教案或素养校验结论 |
+| 科研孵化 | `education_research` | 完整教育研究方案 |
 
 知识图谱后端接口不属于本轮正式接口，图谱页继续使用内置数据。完整契约见《API接口文档.md》。
 
@@ -112,8 +114,8 @@ streamlit run app.py --server.port 8502
 
 后端不要一开始同时处理模型、RAG、Neo4j 和接口联调，按两步完成：
 
-1. 固定 JSON 阶段：先实现 4 个 POST 路径，接收规定 JSON，并返回与《API接口文档.md》示例同结构的固定数据。
-2. 真实能力阶段：前后端固定数据联调通过后，再逐个把固定数据替换为模型、RAG 或 Neo4j 结果，字段名和类型不变。
+1. 固定 JSON 阶段：先实现一个 `POST /api/agent-chat`，根据四种 `agent_type` 返回非空 `answer` 和原 `agent_type`。
+2. 真实能力阶段：固定回答联调通过后，再逐个接入星辰工作流、GraphRAG、向量检索或 LoRA，保持前端稳定字段不变。
 
 联调顺序固定为：课程工作台 → 智能诊断 → 教学模拟 → 科研孵化。后端需提供 BaseURL、是否启用 `X-Token`、测试令牌、启动方法和可联调时间。
 

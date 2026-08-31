@@ -22,6 +22,38 @@ import streamlit as st
 import config
 import components as comp
 
+
+def _agent_payload(agent_key: str, question: str) -> dict:
+  """按稳定契约构造唯一允许发送给后端的两个字段。"""
+  return {
+    "question": question.strip(),
+    "agent_type": config.AGENT_TYPES[agent_key],
+  }
+
+
+def _render_agent_sources(result: dict):
+  """兼容后端未来新增的文档来源与图谱来源字段。"""
+  if not isinstance(result, dict):
+    return
+  sources = result.get("sources") if isinstance(result.get("sources"), list) else []
+  graph_sources = (
+    result.get("graph_sources") if isinstance(result.get("graph_sources"), list) else []
+  )
+  if not sources and not graph_sources:
+    return
+  lines = []
+  if sources:
+    lines.append(f"文档来源：{comp.safe_text('；'.join(map(str, sources)))}")
+  if graph_sources:
+    lines.append(f"图谱来源：{comp.safe_text('；'.join(map(str, graph_sources)))}")
+  comp.info_card(
+    "回答依据",
+    lines,
+    icon_name="database",
+    tone=config.COLORS["accent"],
+    light=True,
+  )
+
 # =====================================================================
 # 一、知识图谱 Mock 数据（依据《多源异构领域知识引擎》原表构建）
 # =====================================================================
@@ -386,10 +418,11 @@ def _reset_flow():
   st.session_state["flow_status"] = ""
   st.session_state["sim_feedback"] = None
   st.session_state["sim_signals"] = None
+  st.session_state["sim_agent_result"] = None
 
 
 def _mock_flow_result(r):
-  """确定性规则生成 Mock 心流结果（结构对齐 /api/sim/flow 契约，作为网关回退数据）。"""
+  """确定性生成本地心流结果，供演示模式或统一接口失败时回退。"""
   f = {
     "engage": float(min(96, 55 + r * 7 + (r % 2) * 4)),
     "confuse": float(max(12, 52 - r * 6 + (r % 3) * 3)),
@@ -410,18 +443,26 @@ def _bounded_percentage(value, fallback):
 
 
 def _advance_flow(theme, utterance):
-  """模拟学生互动：经统一网关请求后端 /api/sim/flow，失败自动回退 Mock 数值。"""
+  """模拟学生互动：统一调用 /api/agent-chat，失败自动回退本地互动数据。"""
   r = st.session_state["sim_round"] + 1
   mock_res = _mock_flow_result(r)
+  question = (
+    "请作为 STEM 教师学习辅导智能体，根据下面的授课主题和教师话语，"
+    "指出学生可能出现的认知困惑，并给出下一轮课堂互动建议。\n"
+    f"授课主题：{theme}\n"
+    f"教师话语：{(utterance or '')[:300]}\n"
+    f"当前互动轮次：第 {r} 轮"
+  )
   res = comp.api_gate(
     config.API_ENDPOINTS["sim_flow"],
-    {"theme": theme, "utterance": (utterance or "")[:300], "round": r},
+    _agent_payload("sim_flow", question),
     mock_result=mock_res,
   )
   st.session_state["sim_round"] = r
   if not isinstance(res, dict):
     res = mock_res
-  flow = res.get("flow")
+  is_real = comp.is_agent_response(res)
+  flow = mock_res["flow"] if is_real else res.get("flow")
   st.session_state["flow"] = {
     key: _bounded_percentage(
       flow.get(key) if isinstance(flow, dict) else None,
@@ -429,11 +470,18 @@ def _advance_flow(theme, utterance):
     )
     for key, fallback in mock_res["flow"].items()
   }
-  st.session_state["flow_status"] = str(res.get("status", "") or "")
-  feedback = res.get("feedback")
-  signals = res.get("signals")
+  st.session_state["flow_status"] = (
+    "学习辅导智能体已生成本轮课堂建议"
+    if is_real else str(res.get("status", "") or "")
+  )
+  feedback = (
+    [{"name": "学习辅导智能体", "role": "课堂互动建议", "text": res["answer"]}]
+    if is_real else res.get("feedback")
+  )
+  signals = None if is_real else res.get("signals")
   st.session_state["sim_feedback"] = feedback if isinstance(feedback, list) else None
   st.session_state["sim_signals"] = signals if isinstance(signals, list) else None
+  st.session_state["sim_agent_result"] = res if is_real else None
 
 
 def _sim_signals():
@@ -552,7 +600,7 @@ def page_overview():
   with col_b:
     comp.mock_badge()
     st.markdown('<div style="height:2px;"></div>', unsafe_allow_html=True)
-    st.caption(f"版本 {config.VERSION} ｜ 后端 {config.API_BASE}（预留）")
+    st.caption(f"版本 {config.VERSION} ｜ 统一接口 {config.API_BASE}/api/agent-chat")
 
   comp.section_title("系统整体架构", "应用层 → 能力层 → 知识图谱底座 → 教-学-研闭环")
   st.mermaid_chart("""%%{init: {"theme": "base", "themeVariables": {
@@ -696,7 +744,7 @@ def page_simulation():
           f'{comp.icon("activity", 14, "#9ED9AC")} 模拟授课进行中 · {round_text}</div>',
           unsafe_allow_html=True,
         )
-      st.caption("点击“开始模拟授课”只初始化课堂；点击互动按钮后才会请求一次心流接口。")
+      st.caption("点击“开始模拟授课”只初始化课堂；点击互动按钮后才会请求统一智能体接口。")
 
   with mid:
     with st.container(border=True):
@@ -712,7 +760,7 @@ def page_simulation():
         r = st.session_state["sim_round"]
         fb = st.session_state.get("sim_feedback")
         if fb:
-          # 后端返回的反馈（/api/sim/flow → feedback）
+          # 真实模式下展示 /api/agent-chat 的 answer；Mock 模式展示本地虚拟学生话术。
           palette = ["#8C6E4A", "#A67C52", "#4F7A5E", "#968D7B", "#5C6B7A"]
           for i, item in enumerate(x for x in fb if isinstance(x, dict)):
             name = comp.safe_text(item.get("name", "虚拟学生"))
@@ -741,6 +789,7 @@ def page_simulation():
               <div class="dsh-bubble-body">“{student_msg}”</div></div>""",
               unsafe_allow_html=True,
             )
+        _render_agent_sources(st.session_state.get("sim_agent_result"))
 
   with right:
     with st.container(border=True):
@@ -753,7 +802,7 @@ def page_simulation():
         on_click=_advance_flow, args=(theme, teacher_input),
         key="sim_interact_btn",
       )
-      st.caption("每次点击只请求一轮 /api/sim/flow；接口失败时自动回退 Mock。")
+      st.caption("每次点击只请求一轮 /api/agent-chat；接口失败时自动回退 Mock。")
 
   with st.container(border=True):
     comp.section_title("多模态感知数据栏", "语音 + 视觉 + 交互 · 三模态时序特征提取")
@@ -811,6 +860,18 @@ def _normalise_diagnosis_result(result):
   """为页面缓存补齐诊断报告必需字段，保留可用的真实后端内容。"""
   if not isinstance(result, dict):
     result = {}
+  if comp.is_agent_response(result):
+    return {
+      "meta": "真实后端 · STEM 课堂诊断智能体",
+      "problems": [],
+      "conclusion": result["answer"],
+      "suggests": [],
+      "trace": None,
+      "agent_type": result["agent_type"],
+      "sources": result.get("sources", []),
+      "graph_sources": result.get("graph_sources", []),
+      "_real_response": True,
+    }
   problems = result.get("problems")
   problems = [p for p in problems if isinstance(p, dict)] if isinstance(problems, list) else []
   suggests = result.get("suggests")
@@ -894,9 +955,14 @@ def page_diagnosis():
         disabled=not can_gen,
         key="diag_gen_btn",
       ):
+        question = (
+          "请作为 STEM 课堂诊断智能体，对下面的课例或课堂实录进行诊断。"
+          "请分析主要教学问题、课堂证据、可能原因和可执行的改进策略，并给出总结。\n\n"
+          f"课例正文：\n{lesson_text[:20000]}"
+        )
         rep = comp.api_gate(
           endpoint=config.API_ENDPOINTS["diag_report"],
-          payload={"lesson_text": lesson_text, "modalities": ["text"]},
+          payload=_agent_payload("diag_report", question),
           mock_result={**DIAG_REPORT, "trace": TRACE_GRAPH},
         )
         rep = _normalise_diagnosis_result(rep)
@@ -915,7 +981,7 @@ def page_diagnosis():
       if result_dirty:
         st.warning("课例内容已变化，当前仍显示上一次报告；请重新生成。")
 
-      if result:
+      if result and st.session_state.get("diag_trace"):
         st.markdown('<div style="height:.4rem;"></div>', unsafe_allow_html=True)
         if st.button("查看问题、理论与案例溯源", type="secondary", width="stretch", key="diag_trace_btn"):
           _trace_dialog()
@@ -953,16 +1019,18 @@ def page_diagnosis():
           [comp.safe_text(rep.get("conclusion", ""))],
           icon_name="route", tone=config.COLORS["primary"],
         )
-        comp.section_title("改进建议清单")
-        for i, suggestion in enumerate(rep.get("suggests", []), start=1):
-          st.write(f"{i}. {suggestion}")
+        _render_agent_sources(rep)
+        if rep.get("suggests"):
+          comp.section_title("改进建议清单")
+          for i, suggestion in enumerate(rep.get("suggests", []), start=1):
+            st.write(f"{i}. {suggestion}")
 
 
 @st.dialog("图谱溯源 · 问题、理论与案例", width="large")
 def _trace_dialog():
   """诊断报告关联的局部子图谱弹窗（原“图谱溯源弹窗”）。
 
-  数据来源优先级：后端 /api/diag/report 返回的 trace 字段 → 内置 TRACE_GRAPH Mock。
+  当前统一接口仅在返回可适配的图谱来源时展示真实依据；Mock 模式使用 TRACE_GRAPH。
   """
   comp.section_title("局部溯源子图谱", "诊断问题锚点、教育理论与支撑案例（可选择节点查看详情）")
   data = st.session_state.get("diag_trace") or TRACE_GRAPH
@@ -1088,6 +1156,7 @@ def page_workbench():
   st.session_state.setdefault("ws_stem", STEM_DIMS)
   st.session_state.setdefault("ws_check_conclusion", CHECK_CONCLUSION)
   st.session_state.setdefault("ws_design_context", None)
+  st.session_state.setdefault("ws_agent_result", None)
   st.session_state.setdefault("ws_lesson_editor", st.session_state.get("ws_lesson") or "")
 
   left, right = st.columns([1, 1.7])
@@ -1120,14 +1189,21 @@ def page_workbench():
             "stem": {k: v for k, v, _ in STEM_DIMS},
             "conclusion": None,
           }
+          question = (
+            "请作为 STEM 教学设计智能体，生成一份可直接编辑的完整 Markdown 教案。"
+            "教案应包含教学目标、跨学科概念、项目任务、课堂活动、支架和评价方案。\n"
+            f"学段：{grade}\n主题：{topic}\n课时：{hours}"
+          )
           res = comp.api_gate(
             config.API_ENDPOINTS["workbench_design"],
-            {"action": "generate", "grade": grade, "topic": topic, "hours": hours},
+            _agent_payload("workbench_design", question),
             mock_result=mock_res,
           )
           if not isinstance(res, dict):
             res = mock_res
-          _set_ws_lesson(res.get("lesson_md") or mock_res["lesson_md"])
+          is_real = comp.is_agent_response(res)
+          _set_ws_lesson(res.get("answer") if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
+          st.session_state["ws_agent_result"] = res if is_real else None
           st.session_state["ws_stage"] = 1
           st.session_state["ws_design_context"] = current_context
           st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
@@ -1147,14 +1223,21 @@ def page_workbench():
             "lesson_md": _append_mark_once(cur, "人工迭代修正记录", EDIT_MARK_MD),
             "itrs": None, "stem": None, "conclusion": None,
           }
+          question = (
+            "请作为 STEM 教学设计智能体，优化下面这份人工编辑后的教案。"
+            "请保留合理内容，修复跨学科融合与活动衔接问题，并返回完整修订版 Markdown 教案。\n"
+            f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
+          )
           res = comp.api_gate(
             config.API_ENDPOINTS["workbench_design"],
-            {"action": "revise", "grade": grade, "topic": topic, "hours": hours, "lesson_md": cur},
+            _agent_payload("workbench_design", question),
             mock_result=mock_res,
           )
           if not isinstance(res, dict):
             res = mock_res
-          _set_ws_lesson(res.get("lesson_md") or mock_res["lesson_md"])
+          is_real = comp.is_agent_response(res)
+          _set_ws_lesson(res.get("answer") if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
+          st.session_state["ws_agent_result"] = res if is_real else None
           st.session_state["ws_stage"] = 2
           st.rerun()
       stage = st.session_state["ws_stage"]
@@ -1173,17 +1256,27 @@ def page_workbench():
             "stem": {k: v for k, v, _ in STEM_DIMS},
             "conclusion": CHECK_CONCLUSION,
           }
+          question = (
+            "请作为 STEM 教学设计智能体，对下面教案进行素养对齐校验。"
+            "请从科学思维、数学建模、工程实践、技术应用、社会责任等方面给出证据、"
+            "不足和改进建议，最后给出总体结论。\n"
+            f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
+          )
           res = comp.api_gate(
             config.API_ENDPOINTS["workbench_design"],
-            {"action": "check", "grade": grade, "topic": topic, "hours": hours, "lesson_md": cur},
+            _agent_payload("workbench_design", question),
             mock_result=mock_res,
           )
           if not isinstance(res, dict):
             res = mock_res
-          _set_ws_lesson(res.get("lesson_md") or mock_res["lesson_md"])
+          is_real = comp.is_agent_response(res)
+          _set_ws_lesson(cur if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
           st.session_state["ws_stage"] = 3
           _apply_itrs_stem(res, ITRS_DIMS, STEM_DIMS)
-          st.session_state["ws_check_conclusion"] = res.get("conclusion") or CHECK_CONCLUSION
+          st.session_state["ws_check_conclusion"] = (
+            res["answer"] if is_real else (res.get("conclusion") or CHECK_CONCLUSION)
+          )
+          st.session_state["ws_agent_result"] = res if is_real else None
           st.rerun()
       stage = st.session_state["ws_stage"]
       if st.button("重置演示流程", width="stretch", disabled=stage == 0, key="ws_reset"):
@@ -1193,6 +1286,7 @@ def page_workbench():
         st.session_state["ws_itrs"] = ITRS_DIMS
         st.session_state["ws_stem"] = STEM_DIMS
         st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
+        st.session_state["ws_agent_result"] = None
         st.rerun()
 
       st.caption("三步严格按序解锁：AI 初生成、人工编辑并提交、素养对齐校验。")
@@ -1220,6 +1314,7 @@ def page_workbench():
           st.caption("编辑内容会用于下一步人工迭代、素养校验和跨页传递。")
         with tab_preview:
           st.markdown(edited_lesson)
+        _render_agent_sources(st.session_state.get("ws_agent_result"))
 
         send_sim, send_diag = st.columns(2)
         with send_sim:
@@ -1317,6 +1412,14 @@ def _normalise_research_result(result):
   }
   if not isinstance(result, dict):
     return mock
+  if comp.is_agent_response(result):
+    return {
+      "answer": result["answer"],
+      "agent_type": result["agent_type"],
+      "sources": result.get("sources", []),
+      "graph_sources": result.get("graph_sources", []),
+      "_real_response": True,
+    }
   normalised = {}
   for key, fallback in mock.items():
     value = result.get(key)
@@ -1373,9 +1476,15 @@ def page_research():
           "survey_md": SURVEY_DRAFT_MD,
           "exp_md": EXP_DRAFT_MD,
         }
+        question = (
+          "请作为 STEM 教育科研智能体，把下面的真实教学痛点转化为一份可执行的小型教育研究方案。"
+          "请包含研究选题与依据、研究问题、文献综述提纲、研究方法、样本与过程、"
+          "问卷或访谈工具初稿、数据分析思路和预期成果。\n\n"
+          f"教学痛点：\n{pain[:2000]}"
+        )
         result = comp.api_gate(
           endpoint=config.API_ENDPOINTS["research_plan"],
-          payload={"pain_point": pain[:2000]},
+          payload=_agent_payload("research_plan", question),
           mock_result=mock_res,
         )
         st.session_state["research_result"] = _normalise_research_result(result)
@@ -1391,15 +1500,20 @@ def page_research():
       st.warning("教学痛点已变化，当前仍显示上一次方案；请重新生成。")
     generated_source = st.session_state["research_generated_source"] or "独立输入"
     st.caption(f"方案来源：{generated_source} · 已缓存，切换标签页不会重复请求")
-    t1, t2, t3 = st.tabs(["研究选题", "文献综述提纲", "问卷与实验设计初稿"])
-    with t1:
-      st.markdown(result["topic_md"])
-    with t2:
-      st.markdown(result["lit_md"])
-    with t3:
-      st.markdown(result["survey_md"])
-      st.divider()
-      st.markdown(result["exp_md"])
+    if comp.is_agent_response(result):
+      comp.section_title("智能体完整研究方案", "真实后端统一文本回答")
+      st.markdown(result["answer"])
+      _render_agent_sources(result)
+    else:
+      t1, t2, t3 = st.tabs(["研究选题", "文献综述提纲", "问卷与实验设计初稿"])
+      with t1:
+        st.markdown(result["topic_md"])
+      with t2:
+        st.markdown(result["lit_md"])
+      with t3:
+        st.markdown(result["survey_md"])
+        st.divider()
+        st.markdown(result["exp_md"])
   else:
     comp.info_card(
       "等待生成",

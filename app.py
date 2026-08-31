@@ -72,9 +72,10 @@ with st.sidebar:
     comp.mock_badge()
     comp.backend_badge()
 
+    runtime_label = "Mock 演示版" if config.MOCK_MODE else "真实后端模式"
     st.markdown(
-        f'<div class="dsh-foot">STEM教师教育一体化智能体<br>{config.VERSION} · Mock 演示版<br>'
-        f'接口预留：{config.API_BASE}</div>',
+        f'<div class="dsh-foot">STEM教师教育一体化智能体<br>{config.VERSION} · {runtime_label}<br>'
+        f'统一接口：{config.API_BASE}/api/agent-chat</div>',
         unsafe_allow_html=True,
     )
 

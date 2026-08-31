@@ -44,17 +44,30 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 MOCK_MODE = _env_bool("STEM_MOCK_MODE", True)  # True = 内置 Mock；False = 请求真实后端
-API_BASE = (os.getenv("STEM_API_BASE") or "").strip().rstrip("/") or "http://127.0.0.1:8000"
+API_BASE = (
+    (os.getenv("STEM_API_BASE") or "").strip().rstrip("/")
+    or "https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run"
+)
 API_TOKEN = (os.getenv("STEM_API_TOKEN") or "").strip()  # 可选 X-Token，不在页面或日志中展示
-API_TIMEOUT = 10                 # 后端请求超时（秒）
+API_CONNECT_TIMEOUT = 10          # 建立连接超时（秒）
+API_READ_TIMEOUT = 180            # 工作流 / GraphRAG / LoRA 生成最长等待（秒）
+API_TIMEOUT = (API_CONNECT_TIMEOUT, API_READ_TIMEOUT)
 
-# 四大业务智能体对应的后端接口（契约详见《API接口文档.md》）
-# 后端不可达时 api_gate 自动回退 Mock 数据，页面布局不受影响。
+# 四个页面语义入口统一映射到稳定契约 POST /api/agent-chat。
+# 保留四个键是为了维持页面架构；真实请求路径和 Body 格式完全一致。
 API_ENDPOINTS = {
-    "sim_flow": "/api/sim/flow",                  # 教学模拟：心流指标 + 学生反馈 + 多模态信号
-    "diag_report": "/api/diag/report",            # 智能诊断：诊断报告 + 溯源子图
-    "workbench_design": "/api/workbench/design",  # 课程设计：generate / revise / check 三步合一
-    "research_plan": "/api/research/plan",        # 科研孵化：选题 + 文献提纲 + 问卷/实验设计
+    "sim_flow": "/api/agent-chat",
+    "diag_report": "/api/agent-chat",
+    "workbench_design": "/api/agent-chat",
+    "research_plan": "/api/agent-chat",
+}
+
+# 文档约定的四种固定 agent_type；页面不自行猜测或分类用户问题。
+AGENT_TYPES = {
+    "sim_flow": "learning_support",
+    "workbench_design": "lesson_design",
+    "diag_report": "classroom_diagnosis",
+    "research_plan": "education_research",
 }
 
 # ========================= 主题色板（参照 cs2ze.org：纸感米底 + 深炭卡片 + Fluent 蓝） =========================
@@ -194,6 +207,7 @@ AGENTS = [
     {
         "name": "高保真跨学科教学模拟智能体",
         "page_id": "02",
+        "agent_type": AGENT_TYPES["sim_flow"],
         "icon": "mic",
         "breakthroughs": [
             "全维度多模态教学感知框架：同步采集语音、视觉、交互三类数据",
@@ -205,6 +219,7 @@ AGENTS = [
     {
         "name": "因材施教智能教学诊断与元认知反思智能体",
         "page_id": "03",
+        "agent_type": AGENT_TYPES["diag_report"],
         "icon": "search",
         "breakthroughs": [
             "学生认知反向归因诊断机制：以 AI 虚拟学生实时认知困惑数据为锚点，反向定位教师教学缺陷",
@@ -215,6 +230,7 @@ AGENTS = [
     {
         "name": "人机协同跨学科课程设计智能工作台",
         "page_id": "04",
+        "agent_type": AGENT_TYPES["workbench_design"],
         "icon": "wrench",
         "breakthroughs": [
             "启发式初生成：垂类大模型基于师范生 ITRS 能力分层推送适配支架，生成初始跨学科单元框架",
@@ -226,6 +242,7 @@ AGENTS = [
     {
         "name": "课堂数据驱动教育研究孵化智能伙伴",
         "page_id": "05",
+        "agent_type": AGENT_TYPES["research_plan"],
         "icon": "flask-conical",
         "breakthroughs": [
             "教学数据归因分析：自动捕获实训全流程多模态认知冲突数据",
