@@ -18,6 +18,11 @@
  业务数据与图谱数据全链路打通。
 """
 
+import io
+import re
+import zipfile
+import xml.etree.ElementTree as ET
+
 import streamlit as st
 import config
 import components as comp
@@ -705,6 +710,26 @@ def _start_simulation():
   st.session_state["sim_started"] = True
 
 
+def _transcribe_sim_audio():
+  """在控件创建前执行转写回调，安全更新授课文本 widget 状态。"""
+  uploaded = st.session_state.get("sim_audio_upload")
+  if uploaded is None:
+    return
+  audio_bytes = uploaded.getvalue()
+  transcript = comp.transcribe_audio(
+    uploaded.name,
+    audio_bytes,
+    uploaded.type or "audio/wav",
+  )
+  if transcript:
+    st.session_state["sim_teacher_input"] = transcript[:5000]
+    st.session_state["sim_transcribe_notice"] = "音频转写完成，已填入授课文本。"
+  else:
+    st.session_state["sim_transcribe_notice"] = (
+      "音频已保留，但转写接口暂未返回有效文本；可先手动录入，后端同步 /api/transcribe 后即可自动填入。"
+    )
+
+
 def page_simulation():
   comp.page_header("mic", "跨学科教学模拟实训", "高保真跨学科教学模拟智能体", "教学模拟")
 
@@ -726,6 +751,23 @@ def page_simulation():
         placeholder="输入你的授课片段（语音识别文本或手动录入）……",
         key="sim_teacher_input",
       )
+      audio_upload = st.file_uploader(
+        "上传授课音频",
+        type=["wav", "mp3", "m4a", "ogg", "webm"],
+        help="上传后可试听；点击转写会调用 POST /api/transcribe，并把返回的 text 填入授课文本。",
+        key="sim_audio_upload",
+      )
+      if audio_upload is not None:
+        audio_bytes = audio_upload.getvalue()
+        st.audio(audio_bytes, format=audio_upload.type or "audio/wav")
+        st.button(
+          "转写音频并填入授课文本",
+          width="stretch",
+          key="sim_transcribe_btn",
+          on_click=_transcribe_sim_audio,
+        )
+      if st.session_state.get("sim_transcribe_notice"):
+        st.caption(st.session_state["sim_transcribe_notice"])
       st.button(
         "开始模拟授课",
         type="primary", width="stretch",
@@ -851,6 +893,31 @@ def _decode_txt(raw):
   return None, None
 
 
+def _extract_docx_text(raw):
+  """仅用标准库提取 DOCX 正文与表格文字，不新增第三方依赖。"""
+  try:
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+      xml_bytes = archive.read("word/document.xml")
+    root = ET.fromstring(xml_bytes)
+  except (KeyError, OSError, ET.ParseError, zipfile.BadZipFile):
+    return None
+  ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+  lines = []
+  for paragraph in root.iter(f"{ns}p"):
+    text = "".join(node.text or "" for node in paragraph.iter(f"{ns}t")).strip()
+    if text:
+      lines.append(text)
+  return "\n".join(lines).strip() or None
+
+
+def _read_lesson_upload(uploaded):
+  """按扩展名读取诊断页上传文件，统一返回（纯文本, 读取方式）。"""
+  raw = uploaded.getvalue()
+  if uploaded.name.lower().endswith(".docx"):
+    return _extract_docx_text(raw), "DOCX"
+  return _decode_txt(raw)
+
+
 def _use_diagnosis_sample():
   st.session_state["diag_lesson_text"] = _diagnosis_sample_text()
   st.session_state["diag_input_source"] = "内置碳中和样例"
@@ -892,6 +959,146 @@ def _normalise_diagnosis_result(result):
   }
 
 
+def _clear_diagnosis_chat():
+  """只清空教师对话，不影响课例和已生成的诊断报告。"""
+  st.session_state["diag_chat_history"] = []
+
+
+def _diagnosis_chat_prompt(question, history, lesson_text, diagnosis_result):
+  """把有限的页面上下文压缩进单轮请求，支持无状态后端连续对话。"""
+  context = []
+  if lesson_text.strip():
+    context.append(f"当前课例摘录：\n{lesson_text.strip()[:2400]}")
+  if isinstance(diagnosis_result, dict) and diagnosis_result.get("conclusion"):
+    context.append(f"最近诊断结论：\n{str(diagnosis_result['conclusion']).strip()[:1600]}")
+  recent = history[-6:] if isinstance(history, list) else []
+  if recent:
+    dialogue = []
+    for item in recent:
+      if not isinstance(item, dict):
+        continue
+      role = "教师" if item.get("role") == "teacher" else "智能体"
+      content = str(item.get("content", "")).strip()[:900]
+      if content:
+        dialogue.append(f"{role}：{content}")
+    if dialogue:
+      context.append("最近对话：\n" + "\n".join(dialogue))
+  background = "\n\n".join(context) or "暂无课例或诊断报告，请直接根据教师描述提供建议。"
+  return (
+    "请作为 STEM 课堂诊断与教师反思智能体，与教师进行连续对话。"
+    "回答应通俗、具体、可执行；先判断问题，再给课堂观察要点和下一步建议。"
+    "若证据不足，请明确提出一到两个需要教师补充的信息。\n\n"
+    f"{background}\n\n教师本轮问题：\n{question.strip()}"
+  )
+
+
+def _diagnosis_chat_mock(question):
+  return (
+    f"我理解你当前关注的是“{question.strip()[:80]}”。建议先记录一项可观察证据，"
+    "例如学生回答、任务完成时间或典型错误；随后只调整一个教学变量，"
+    "如提问层级、示例跨度或小组支架，并在下一轮课堂中对照观察。"
+    "如果你能补充具体学段和课堂现象，我可以继续把建议细化成可直接执行的步骤。"
+  )
+
+
+def _diagnosis_chat_html(value):
+  """安全呈现后端常见 Markdown 结构，不直接执行后端返回的 HTML。"""
+  rendered = []
+  for raw_line in str(value or "").splitlines():
+    line = comp.safe_text(raw_line.strip())
+    line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
+    if not line:
+      rendered.append('<div class="dsh-chat-space"></div>')
+    elif line in ("---", "———"):
+      rendered.append('<hr class="dsh-chat-rule">')
+    elif re.match(r"^#{1,4}\s+", line):
+      title = re.sub(r"^#{1,4}\s+", "", line)
+      rendered.append(f'<div class="dsh-chat-heading">{title}</div>')
+    elif re.match(r"^-\s+", line):
+      item = re.sub(r"^-\s+", "", line)
+      rendered.append(f'<div class="dsh-chat-point"><span>•</span><div>{item}</div></div>')
+    elif re.match(r"^\d+[\.、]\s*", line):
+      match = re.match(r"^(\d+[\.、])\s*(.*)", line)
+      rendered.append(
+        f'<div class="dsh-chat-point"><span>{match.group(1)}</span><div>{match.group(2)}</div></div>'
+      )
+    else:
+      rendered.append(f'<div class="dsh-chat-paragraph">{line}</div>')
+  return "".join(rendered)
+
+
+def _render_diagnosis_chat():
+  """教师就课堂问题与 classroom_diagnosis 智能体连续对话。"""
+  history = st.session_state.setdefault("diag_chat_history", [])
+  with st.container(border=True):
+    title_col, clear_col = st.columns([5, 1])
+    with title_col:
+      comp.section_title("教师—智能体对话", "围绕课堂问题连续追问，自动关联当前课例与诊断结论")
+    with clear_col:
+      st.button(
+        "清空对话", type="secondary", width="stretch",
+        disabled=not bool(history), on_click=_clear_diagnosis_chat,
+        key="diag_chat_clear",
+      )
+
+    if history:
+      bubbles = []
+      for item in history[-12:]:
+        if not isinstance(item, dict):
+          continue
+        is_teacher = item.get("role") == "teacher"
+        row_class = "is-teacher" if is_teacher else "is-agent"
+        role_label = "教师" if is_teacher else "诊断智能体"
+        icon_name = "users" if is_teacher else "brain"
+        content = _diagnosis_chat_html(item.get("content", ""))
+        bubbles.append(
+          f'<div class="dsh-chat-row {row_class}">'
+          f'<div class="dsh-chat-avatar">{comp.icon(icon_name, 16)}</div>'
+          f'<div class="dsh-chat-bubble"><span class="dsh-chat-role">{role_label}</span>{content}</div>'
+          f'</div>'
+        )
+      st.markdown(f'<div class="dsh-chat-list">{"".join(bubbles)}</div>', unsafe_allow_html=True)
+    else:
+      comp.info_card(
+        "可以从一个具体课堂困惑开始",
+        ["例如：学生在小组探究时只抄答案，我应该怎样调整任务和提问？"],
+        icon_name="brain", tone=config.COLORS["accent"], light=True,
+      )
+
+    with st.form("diag_teacher_chat_form", clear_on_submit=True):
+      question = st.text_area(
+        "描述你在课堂中遇到的问题",
+        placeholder="请尽量说明学段、教学内容和学生的具体表现……",
+        height=100, max_chars=2000, key="diag_chat_question",
+      )
+      submitted = st.form_submit_button(
+        "发送给诊断智能体", type="primary", width="stretch",
+      )
+    if submitted and question.strip():
+      prompt = _diagnosis_chat_prompt(
+        question, history,
+        st.session_state.get("diag_lesson_text", ""),
+        st.session_state.get("diag_result"),
+      )
+      response = comp.api_gate(
+        endpoint=config.API_ENDPOINTS["diag_report"],
+        payload=_agent_payload("diag_report", prompt),
+        mock_result={
+          "answer": _diagnosis_chat_mock(question),
+          "agent_type": config.AGENT_TYPES["diag_report"],
+        },
+      )
+      answer = response.get("answer") if isinstance(response, dict) else None
+      if not isinstance(answer, str) or not answer.strip():
+        answer = _diagnosis_chat_mock(question)
+      history.extend([
+        {"role": "teacher", "content": question.strip()},
+        {"role": "assistant", "content": answer.strip()},
+      ])
+      st.session_state["diag_chat_history"] = history[-40:]
+      st.rerun()
+
+
 def page_diagnosis():
   comp.page_header("search", "智能教学诊断与反思", "因材施教智能教学诊断与元认知反思智能体", "智能诊断")
 
@@ -903,28 +1110,32 @@ def page_diagnosis():
   st.session_state.setdefault("diag_generated_source", "")
   st.session_state.setdefault("diag_upload_signature", None)
   st.session_state.setdefault("diag_upload_notice", "")
+  st.session_state.setdefault("diag_chat_history", [])
 
   left, right = st.columns([1, 1.6])
   with left:
     with st.container(border=True):
-      comp.section_title("课例文本输入", "粘贴文本、上传 TXT 或使用内置样例")
+      comp.section_title("课例文本输入", "粘贴文本、上传 TXT / DOCX 或使用内置样例")
       uploaded = st.file_uploader(
-        "上传 TXT 课例 / 课堂实录",
-        type=["txt"],
-        help="支持 UTF-8、UTF-8 BOM 与 GB18030 编码；前端读取后仅向后端发送纯文本。",
+        "上传教学设计或课堂对话文本",
+        type=["txt", "docx"],
+        help="TXT 支持 UTF-8、UTF-8 BOM、GB18030；DOCX 由前端提取正文和表格文字，随后仅发送纯文本。",
         key="diag_upload",
       )
       if uploaded is not None:
         raw = uploaded.getvalue()
         signature = (uploaded.name, len(raw), hash(raw))
         if signature != st.session_state["diag_upload_signature"]:
-          decoded, encoding = _decode_txt(raw)
+          decoded, encoding = _read_lesson_upload(uploaded)
           if decoded is None:
-            st.session_state["diag_upload_notice"] = "无法识别文件编码，请另存为 UTF-8 或 GB18030 后重试。"
+            st.session_state["diag_upload_notice"] = (
+              "无法读取文件内容：TXT 请另存为 UTF-8 或 GB18030；DOCX 请确认文件未损坏且包含可提取文字。"
+            )
           else:
             truncated = len(decoded) > 20000
             st.session_state["diag_lesson_text"] = decoded[:20000]
-            st.session_state["diag_input_source"] = f"TXT 上传：{uploaded.name}"
+            file_kind = "DOCX" if uploaded.name.lower().endswith(".docx") else "TXT"
+            st.session_state["diag_input_source"] = f"{file_kind} 上传：{uploaded.name}"
             suffix = "；已自动截取前 20,000 字" if truncated else ""
             st.session_state["diag_upload_notice"] = f"已按 {encoding} 读取{suffix}。"
           st.session_state["diag_upload_signature"] = signature
@@ -974,7 +1185,7 @@ def page_diagnosis():
         st.rerun()
 
       if not can_gen:
-        st.caption("请先粘贴课例、上传 TXT，或载入内置样例。")
+        st.caption("请先粘贴课例、上传 TXT / DOCX，或载入内置样例。")
 
       result = st.session_state["diag_result"]
       result_dirty = bool(result) and lesson_text != st.session_state["diag_input_snapshot"]
@@ -1024,6 +1235,8 @@ def page_diagnosis():
           comp.section_title("改进建议清单")
           for i, suggestion in enumerate(rep.get("suggests", []), start=1):
             st.write(f"{i}. {suggestion}")
+
+  _render_diagnosis_chat()
 
 
 @st.dialog("图谱溯源 · 问题、理论与案例", width="large")

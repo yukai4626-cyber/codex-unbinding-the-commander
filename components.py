@@ -17,7 +17,9 @@
 
 import copy
 import html
+import json
 import math
+import uuid
 
 import streamlit as st
 import requests
@@ -292,6 +294,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible,
 .dsh-info-title { font-weight:800; color:var(--title); margin-bottom:.5rem; display:flex; gap:.5rem; align-items:center; }
 .dsh-info-line { font-size:.85rem; color:var(--text2); line-height:1.7; margin-bottom:.2rem; }
 .dsh-info-line b { color:var(--text1); }
+
+/* ---------- 教师—智能体连续对话 ---------- */
+.dsh-chat-list { display:flex; flex-direction:column; gap:.65rem; margin:.15rem 0 .8rem; }
+.dsh-chat-row { display:flex; align-items:flex-start; gap:.55rem; }
+.dsh-chat-row.is-teacher { justify-content:flex-end; }
+.dsh-chat-avatar {
+  flex:0 0 30px; width:30px; height:30px; display:grid; place-items:center;
+  border-radius:8px; color:#8C6E4A; background:#FDFBF6;
+  border:1px solid rgba(140,110,74,.24);
+}
+.dsh-chat-row.is-teacher .dsh-chat-avatar { order:2; color:#FDFBF6; background:#8C6E4A; }
+.dsh-chat-bubble {
+  max-width:min(82%, 880px); padding:.7rem .85rem; border-radius:10px;
+  color:#F0F0F2; background:rgba(34,38,48,.92); border:1px solid rgba(255,255,255,.11);
+  box-shadow:0 4px 14px rgba(35,27,20,.10); font-size:.84rem; line-height:1.72;
+  overflow-wrap:anywhere; white-space:normal;
+}
+.dsh-chat-row.is-teacher .dsh-chat-bubble {
+  color:#3A3129; background:#FDFBF6; border-color:rgba(140,110,74,.25);
+}
+.dsh-chat-row.is-agent .dsh-chat-bubble { max-height:520px; overflow-y:auto; }
+.dsh-chat-role { display:block; margin-bottom:.22rem; font-size:.68rem; font-weight:800; letter-spacing:.08em; color:#C9B18F; }
+.dsh-chat-row.is-teacher .dsh-chat-role { color:#8C6E4A; text-align:right; }
+.dsh-chat-heading { margin:.55rem 0 .25rem; color:#fff; font-size:.92rem; font-weight:800; }
+.dsh-chat-paragraph { margin:.16rem 0; }
+.dsh-chat-point { display:grid; grid-template-columns:auto 1fr; gap:.38rem; margin:.18rem 0; }
+.dsh-chat-point > span { color:#C9B18F; font-weight:800; }
+.dsh-chat-rule { border:0; border-top:1px solid rgba(255,255,255,.12); margin:.55rem 0; }
+.dsh-chat-space { height:.28rem; }
 
 /* ---------- 首页 · 四大核心能力（等高响应式卡片） ---------- */
 [data-testid="stHorizontalBlock"]:has(.dsh-agent-card) {
@@ -647,6 +678,7 @@ def init_session_state():
         "diag_result": None,                     # 本次生成的诊断结果缓存
         "diag_trace": None,                      # 与诊断结果同步的溯源子图
         "diag_input_snapshot": None,             # 生成报告时的输入快照
+        "diag_chat_history": [],                 # 教师与诊断智能体的连续对话
         # ---- 科研孵化 ----
         "research_ready": False,
         "research_pain": "",                    # 独立输入或诊断带入的教学痛点
@@ -659,6 +691,185 @@ def init_session_state():
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
+    _init_persistent_state()
+
+
+# 只保存业务输入与生成结果，不保存上传文件对象、后端状态或任何密钥。
+PERSISTED_STATE_KEYS = (
+    "nav_radio",
+    "sim_theme", "sim_teacher_input", "sim_started", "sim_round", "flow",
+    "flow_status", "sim_feedback", "sim_signals", "sim_agent_result",
+    "diag_ready", "diag_lesson_text", "diag_result", "diag_trace",
+    "diag_input_snapshot", "diag_input_source", "diag_generated_source",
+    "diag_chat_history",
+    "ws_stage", "ws_lesson", "ws_lesson_editor", "ws_grade", "ws_topic",
+    "ws_hours", "ws_itrs", "ws_stem", "ws_check_conclusion",
+    "ws_design_context", "ws_agent_result",
+    "research_ready", "research_pain", "research_result",
+    "research_input_snapshot", "research_input_source", "research_generated_source",
+    "research_imported_pain",
+)
+
+
+def _normalise_workspace_id(value) -> str | None:
+    """仅接受规范 UUID，避免把任意路径片段拼入后端地址。"""
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _workspace_id() -> str:
+    current = _normalise_workspace_id(st.session_state.get("workspace_id"))
+    if current:
+        return current
+    try:
+        query_value = st.query_params.get("workspace")
+    except (AttributeError, KeyError):
+        query_value = None
+    current = _normalise_workspace_id(query_value) or str(uuid.uuid4())
+    st.session_state["workspace_id"] = current
+    try:
+        st.query_params["workspace"] = current
+    except (AttributeError, KeyError):
+        pass
+    return current
+
+
+def _persistence_url(workspace_id: str) -> str:
+    return (
+        f"{config.API_BASE.rstrip('/')}/"
+        f"{config.PERSISTENCE_ENDPOINT.strip('/')}/{workspace_id}"
+    )
+
+
+def _persistence_headers():
+    return {"X-Token": config.API_TOKEN} if config.API_TOKEN else None
+
+
+def _persistent_payload() -> dict:
+    state = {}
+    for key in PERSISTED_STATE_KEYS:
+        if key in st.session_state:
+            state[key] = copy.deepcopy(st.session_state[key])
+    return state
+
+
+def _load_persistent_state(workspace_id: str):
+    try:
+        response = requests.get(
+            _persistence_url(workspace_id),
+            headers=_persistence_headers(),
+            timeout=(3, 12),
+        )
+    except requests.exceptions.RequestException:
+        return None
+    if not 200 <= response.status_code < 300:
+        return None
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    state = data.get("state") if isinstance(data, dict) else None
+    return state if isinstance(state, dict) else {}
+
+
+def _restore_persistent_state(state: dict):
+    for key in PERSISTED_STATE_KEYS:
+        if key not in state:
+            continue
+        value = copy.deepcopy(state[key])
+        if key == "ws_design_context" and isinstance(value, list):
+            value = tuple(value)
+        st.session_state[key] = value
+
+
+def _save_persistent_state():
+    if not st.session_state.get("persistence_available"):
+        return False
+    workspace_id = _workspace_id()
+    payload = _persistent_payload()
+    fingerprint = hash(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
+    if fingerprint == st.session_state.get("persistence_fingerprint"):
+        return True
+    try:
+        response = requests.put(
+            _persistence_url(workspace_id),
+            json={"state": payload},
+            headers=_persistence_headers(),
+            timeout=(3, 12),
+        )
+    except requests.exceptions.RequestException:
+        st.session_state["persistence_status"] = "保存暂时失败，本次会话内容仍然保留。"
+        return False
+    if not 200 <= response.status_code < 300:
+        st.session_state["persistence_status"] = "保存接口暂未就绪，本次会话内容仍然保留。"
+        return False
+    st.session_state["persistence_fingerprint"] = fingerprint
+    st.session_state["persistence_status"] = "已自动保存到长期档案。"
+    return True
+
+
+def _init_persistent_state():
+    workspace_id = _workspace_id()
+    if not st.session_state.get("persistence_checked"):
+        st.session_state["persistence_checked"] = True
+        if config.MOCK_MODE:
+            st.session_state["persistence_available"] = False
+            st.session_state["persistence_status"] = "Mock 模式：当前会话自动保留。"
+            return
+        restored = _load_persistent_state(workspace_id)
+        if restored is None:
+            st.session_state["persistence_available"] = False
+            st.session_state["persistence_status"] = "长期保存接口待后端同步；当前会话内容仍会保留。"
+            return
+        _restore_persistent_state(restored)
+        st.session_state["persistence_available"] = True
+        st.session_state["persistence_status"] = (
+            "已恢复上次保存的内容。" if restored else "长期档案已连接，将自动保存新内容。"
+        )
+        st.session_state["persistence_fingerprint"] = hash(
+            json.dumps(_persistent_payload(), ensure_ascii=False, sort_keys=True, default=str)
+        )
+        return
+    _save_persistent_state()
+
+
+def _clear_saved_content():
+    workspace_id = _workspace_id()
+    if st.session_state.get("persistence_available"):
+        try:
+            requests.delete(
+                _persistence_url(workspace_id),
+                headers=_persistence_headers(),
+                timeout=(3, 12),
+            )
+        except requests.exceptions.RequestException:
+            pass
+    for key in PERSISTED_STATE_KEYS:
+        st.session_state.pop(key, None)
+    st.session_state["persistence_fingerprint"] = None
+    st.session_state["persistence_status"] = "已清除当前内容和长期档案。"
+
+
+def persistence_controls():
+    """全局档案状态和手动清除入口；保持侧边栏结构不变。"""
+    workspace_id = _workspace_id()
+    with st.expander("内容保存与清除", expanded=False):
+        status = safe_text(st.session_state.get("persistence_status", "当前会话自动保留。"))
+        st.markdown(
+            f'<div class="dsh-flow-status">{icon("bookmark", 14)} {status}</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption("档案编号已写入当前网址的 workspace 参数；重新打开同一完整网址即可恢复。")
+        st.code(workspace_id, language=None)
+        st.button(
+            "清除全部已保存内容",
+            type="secondary",
+            width="stretch",
+            on_click=_clear_saved_content,
+            key="persistence_clear_all",
+        )
 
 
 # =====================================================================
@@ -1318,6 +1529,39 @@ def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"
         return _mock_copy(mock_result)
     _set_backend_status("ok", f"HTTP {resp.status_code}")
     return cleaned
+
+
+def transcribe_audio(filename: str, audio_bytes: bytes, content_type: str = "audio/wav"):
+    """调用独立音频转写接口，返回纯文本；失败时返回 ``None``。
+
+    后端稳定契约：POST multipart/form-data /api/transcribe，文件字段 ``file``，
+    响应为 ``{"text": "..."}``。该能力与四智能体 JSON 接口相互独立。
+    """
+    if not audio_bytes:
+        return None
+    if config.MOCK_MODE:
+        return "同学们，今天我们从校园碳足迹出发，讨论如何用跨学科知识设计减排方案。"
+
+    url = f"{config.API_BASE.rstrip('/')}/{config.TRANSCRIBE_ENDPOINT.lstrip('/')}"
+    headers = {"X-Token": config.API_TOKEN} if config.API_TOKEN else None
+    try:
+        with st.spinner("正在识别音频并转换为文本……"):
+            resp = requests.post(
+                url,
+                files={"file": (filename or "audio.wav", audio_bytes, content_type or "audio/wav")},
+                headers=headers,
+                timeout=config.API_TIMEOUT,
+            )
+    except requests.exceptions.RequestException:
+        return None
+    if not 200 <= resp.status_code < 300:
+        return None
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+    text = data.get("text") if isinstance(data, dict) else None
+    return text.strip() if isinstance(text, str) and text.strip() else None
 
 
 def is_agent_response(result) -> bool:

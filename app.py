@@ -93,3 +93,4 @@ PAGE_FUNCS = {
 current = st.session_state.get("nav_radio", "01")
 render = PAGE_FUNCS.get(current, pages.page_overview)
 render()
+comp.persistence_controls()

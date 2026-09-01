@@ -124,3 +124,81 @@ streamlit run app.py --server.port 8502
 6. 页面有加载反馈，失败后可恢复且不会泄露内部异常。
 
 回答质量评测由后端侧另行进行。
+
+## 9. 前端扩展接口（待后端同步）
+
+### 9.1 音频转写
+
+```text
+POST /api/transcribe
+Content-Type: multipart/form-data
+文件字段：file
+```
+
+成功响应：
+
+```json
+{
+  "text": "识别后的授课文本"
+}
+```
+
+前端支持 WAV、MP3、M4A、OGG、WebM。失败时保留音频和手动文本输入，不影响四智能体接口。
+
+### 9.2 跨会话内容档案
+
+`workspace_id` 由前端生成，为不包含个人信息的 UUID。状态对象只包含业务输入与生成结果，不包含上传文件、Token 或后端连接状态。
+
+```text
+GET /api/frontend-state/{workspace_id}
+```
+
+返回：
+
+```json
+{
+  "state": {}
+}
+```
+
+新档案也必须返回 HTTP 200 和空 `state`；不要用 404 表示空档案，否则前端会判断为接口尚未启用。
+
+```text
+PUT /api/frontend-state/{workspace_id}
+Content-Type: application/json
+```
+
+请求：
+
+```json
+{
+  "state": {
+    "sim_teacher_input": "授课文本",
+    "diag_lesson_text": "课例文本",
+    "ws_lesson": "生成的 Markdown 教案",
+    "research_result": {}
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true
+}
+```
+
+手动清除：
+
+```text
+DELETE /api/frontend-state/{workspace_id}
+```
+
+成功响应：
+
+```json
+{
+  "success": true
+}
+```

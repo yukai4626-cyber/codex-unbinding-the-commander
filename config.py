@@ -62,6 +62,17 @@ API_ENDPOINTS = {
     "research_plan": "/api/agent-chat",
 }
 
+# 音频转写为独立的文件上传能力，不计入四个业务智能体接口。
+# 后端契约：POST multipart/form-data /api/transcribe，字段名 file；
+# 成功返回 {"text": "转写文本"}。接口未就绪时前端保留音频并允许手动录入。
+TRANSCRIBE_ENDPOINT = "/api/transcribe"
+
+# 跨会话内容档案接口。workspace_id 是前端生成的随机 UUID，不包含个人信息。
+# GET    /api/frontend-state/{workspace_id} -> {"state": {...}}
+# PUT    /api/frontend-state/{workspace_id} <- {"state": {...}}
+# DELETE /api/frontend-state/{workspace_id} -> {"success": true}
+PERSISTENCE_ENDPOINT = "/api/frontend-state"
+
 # 文档约定的四种固定 agent_type；页面不自行猜测或分类用户问题。
 AGENT_TYPES = {
     "sim_flow": "learning_support",
