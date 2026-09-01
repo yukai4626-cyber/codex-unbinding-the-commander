@@ -1179,9 +1179,26 @@ def page_workbench():
 
       _ws_steps_html()
 
-      b1, b2, b3 = st.columns(3)
-      with b1:
-        if st.button("AI 初生成", type="primary", width="stretch", key="ws_b1"):
+      with st.container(key="ws_action_row"):
+        b1, b2, b3 = st.columns(3)
+        with b1:
+          generate_clicked = st.button("AI 初生成", type="primary", width="stretch", key="ws_b1")
+        with b2:
+          iterate_clicked = st.button(
+            "提交人工迭代",
+            type="secondary", width="stretch",
+            disabled=st.session_state["ws_stage"] != 1 or context_stale or not _current_ws_lesson().strip(),
+            key="ws_b2",
+          )
+        with b3:
+          check_clicked = st.button(
+            "素养校验",
+            type="secondary", width="stretch",
+            disabled=st.session_state["ws_stage"] != 2 or context_stale or not _current_ws_lesson().strip(),
+            key="ws_b3",
+          )
+
+      if generate_clicked:
           mock_res = {
             "stage": 1,
             "lesson_md": LESSON_TEMPLATE.format(grade=grade, topic=topic, hours=hours),
@@ -1209,14 +1226,7 @@ def page_workbench():
           st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
           _apply_itrs_stem(res, ITRS_DIMS, STEM_DIMS)
           st.rerun()
-      stage = st.session_state["ws_stage"]
-      with b2:
-        if st.button(
-          "提交人工迭代",
-          type="secondary", width="stretch",
-          disabled=stage != 1 or context_stale or not _current_ws_lesson().strip(),
-          key="ws_b2",
-        ):
+      if iterate_clicked:
           cur = _current_ws_lesson()
           mock_res = {
             "stage": 2,
@@ -1240,14 +1250,7 @@ def page_workbench():
           st.session_state["ws_agent_result"] = res if is_real else None
           st.session_state["ws_stage"] = 2
           st.rerun()
-      stage = st.session_state["ws_stage"]
-      with b3:
-        if st.button(
-          "素养校验",
-          type="secondary", width="stretch",
-          disabled=stage != 2 or context_stale or not _current_ws_lesson().strip(),
-          key="ws_b3",
-        ):
+      if check_clicked:
           cur = _current_ws_lesson()
           mock_res = {
             "stage": 3,

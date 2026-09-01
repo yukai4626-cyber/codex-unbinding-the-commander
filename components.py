@@ -257,15 +257,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible,
 
 .dsh-stat {
   background-color: var(--block); background-image:var(--noise);
-  border:1px solid rgba(255, 255, 255, 0.10); border-radius:var(--surface-radius); padding:1rem 1.1rem; position:relative;
+  border:1px solid rgba(255, 255, 255, 0.10); border-radius:var(--surface-radius); padding:.9rem 1rem; position:relative;
+  box-sizing:border-box; min-height:8.2rem; height:100%;
   box-shadow:var(--surface-shadow);
   transition: all .22s var(--ease-out-quint); animation: dshFadeIn .5s var(--ease-out-quint) backwards;
 }
 .dsh-stat:hover { transform:translateY(-2px); box-shadow:0 6px 20px #00000024; }
-.dsh-stat-icon { position:absolute; top:.85rem; right:1rem; color:var(--warm); }
-.dsh-stat-value { font-size:1.6rem; font-weight:800; color:var(--text1); line-height:1.15; font-variant-numeric:tabular-nums; }
-.dsh-stat-label { font-size:.78rem; color:var(--text2); margin-top:.2rem; }
+.dsh-stat-value {
+  font-size:clamp(1.15rem, 1.8vw, 1.6rem); font-weight:800; color:var(--text1);
+  line-height:1.15; font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.dsh-stat-meta { display:flex; align-items:flex-start; gap:.38rem; margin-top:.48rem; }
+.dsh-stat-icon {
+  position:static; flex:0 0 1.4rem; width:1.4rem; height:1.4rem;
+  display:grid; place-items:center; color:var(--warm); border-radius:6px;
+  background:rgba(166,124,82,.12); border:1px solid rgba(201,177,143,.2);
+}
+.dsh-stat-icon svg { width:14px; height:14px; }
+.dsh-stat-label { min-width:0; font-size:.78rem; color:var(--text2); line-height:1.45; }
 .dsh-stat-delta { font-size:.7rem; color:#54B95A; margin-top:.28rem; font-weight:600; }
+[data-testid="stHorizontalBlock"]:has(.dsh-stat) > [data-testid="stColumn"],
+[data-testid="stHorizontalBlock"]:has(.dsh-stat) > [data-testid="stColumn"] > div,
+[data-testid="stHorizontalBlock"]:has(.dsh-stat) [data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"]:has(.dsh-stat) [data-testid="stElementContainer"]:has(.dsh-stat),
+[data-testid="stHorizontalBlock"]:has(.dsh-stat) [data-testid="stMarkdownContainer"]:has(.dsh-stat) {
+  height:100%;
+}
 
 .dsh-info {
   background-color: var(--block); background-image:var(--noise);
@@ -446,6 +463,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible,
 [data-testid="stBaseButton-secondary"]:hover { background:rgba(201,177,143,.08) !important; }
 [data-testid="stBaseButton-disabled"], .stButton > button[kind="disabled"], .stButton > button:disabled {
   background:#2A2E36 !important; color:#8A8A8A !important; border:none !important; cursor:not-allowed !important;
+}
+
+/* ---------- 工作台 · 三步横向等宽按钮 ---------- */
+.st-key-ws_action_row [data-testid="stHorizontalBlock"] {
+  gap:.42rem; align-items:stretch;
+}
+.st-key-ws_action_row [data-testid="stColumn"] { min-width:0; }
+.st-key-ws_action_row [data-testid="stButton"] { width:100%; height:100%; }
+.st-key-ws_action_row [data-testid="stButton"] > button {
+  width:100%; height:10.5rem; min-height:10.5rem;
+  padding:.7rem .2rem !important; display:flex; align-items:center; justify-content:center;
+}
+.st-key-ws_action_row [data-testid="stButton"] > button p {
+  width:1.8em; margin:0; white-space:normal !important;
+  line-height:1.55 !important; overflow-wrap:normal; word-break:normal;
+  text-align:center; font-size:clamp(.72rem, .86vw, .86rem); letter-spacing:.045em;
+}
+.st-key-ws_action_row [data-testid="stColumn"]:first-child button p,
+.st-key-ws_action_row [data-testid="stColumn"]:last-child button p {
+  letter-spacing:.12em;
 }
 
 /* ---------- 其余原生组件 ---------- */
@@ -651,13 +688,13 @@ def section_title(text: str, note: str = ""):
 
 
 def stat_card(value, label, delta=None, icon=None, icon_name=None):
-    """统一样式统计卡片：数值大号加粗，标签/增量居下，右上角 Iconify 图标点缀。"""
+    """统一样式统计卡片：数值独占首行，图标与标签组合居下，避免窄卡片内容重叠。"""
     name = icon_name or icon or "activity"
     d = f'<div class="dsh-stat-delta">{delta}</div>' if delta else ""
     st.markdown(
-        f"""<div class="dsh-stat"><div class="dsh-stat-icon">{_ICON_FN(name, 18)}</div>
-        <div class="dsh-stat-value">{value}</div>
-        <div class="dsh-stat-label">{label}</div>{d}</div>""",
+        f"""<div class="dsh-stat"><div class="dsh-stat-value">{value}</div>
+        <div class="dsh-stat-meta"><div class="dsh-stat-icon">{_ICON_FN(name, 18)}</div>
+        <div class="dsh-stat-label">{label}</div></div>{d}</div>""",
         unsafe_allow_html=True,
     )
 
