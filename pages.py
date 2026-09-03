@@ -716,18 +716,33 @@ def _transcribe_sim_audio():
   if uploaded is None:
     return
   audio_bytes = uploaded.getvalue()
+  if len(audio_bytes) > 50 * 1024 * 1024:
+    st.session_state["sim_transcribe_notice"] = "音频超过 50 MB，请压缩或分段上传。"
+    return
+  st.session_state["sim_transcribe_notice"] = "转写中……"
   transcript = comp.transcribe_audio(
     uploaded.name,
     audio_bytes,
     uploaded.type or "audio/wav",
   )
   if transcript:
-    st.session_state["sim_teacher_input"] = transcript[:5000]
-    st.session_state["sim_transcribe_notice"] = "音频转写完成，已填入授课文本。"
-  else:
-    st.session_state["sim_transcribe_notice"] = (
-      "音频已保留，但转写接口暂未返回有效文本；可先手动录入，后端同步 /api/transcribe 后即可自动填入。"
-    )
+    st.session_state["sim_transcript"] = transcript
+
+
+def _apply_transcript(append=False):
+  transcript = st.session_state.get("sim_transcript", "").strip()
+  previous = st.session_state.get("sim_teacher_input", "").strip()
+  text = f"{previous}\n\n{transcript}" if append and previous else transcript
+  if len(text) > 5000 and not st.session_state.get("sim_transcribe_truncate"):
+    return
+  st.session_state["sim_teacher_input"] = text[:5000]
+  st.session_state["sim_transcribe_notice"] = "已追加到授课文本。" if append else "已替换授课文本。"
+
+
+def _audio_changed():
+  st.session_state["sim_transcribe_notice"] = "待转写：确认音频后点击转写按钮。"
+  st.session_state["sim_transcript"] = ""
+  st.session_state.pop("sim_transcribe_truncate", None)
 
 
 def page_simulation():
@@ -735,17 +750,16 @@ def page_simulation():
 
   # Streamlit 会在控件离开页面后清理对应 key；返回模拟页时恢复演示授课文本。
   # 用户在当前页面主动清空输入时 key 仍存在，因此不会被这里强制覆盖。
-  if not st.session_state.get("sim_teacher_input"):
-    st.session_state["sim_teacher_input"] = TEACHER_INPUT_DEMO
-  st.session_state["sim_teacher_initialized"] = True
   st.session_state.setdefault("sim_theme", SIM_THEMES[0])
 
-  left, mid, right = st.columns([1.05, 1.55, 1.3])
+  left = st.container(key="sim_prepare")
+  with st.container(key="sim_feedback_layout"):
+    mid, right = st.columns([1.3, 1])
   with left:
     with st.container(border=True):
       comp.section_title("授课输入区")
-      theme = st.selectbox("实训主题", SIM_THEMES, key="sim_theme")
-      teacher_input = st.text_area(
+      theme = comp.draft_widget("selectbox", "实训主题", options=SIM_THEMES, key="sim_theme")
+      teacher_input = comp.draft_widget("text_area",
         "语音 / 文本授课输入",
         height=130,
         placeholder="输入你的授课片段（语音识别文本或手动录入）……",
@@ -754,20 +768,38 @@ def page_simulation():
       audio_upload = st.file_uploader(
         "上传授课音频",
         type=["wav", "mp3", "m4a", "ogg", "webm"],
-        help="上传后可试听；点击转写会调用 POST /api/transcribe，并把返回的 text 填入授课文本。",
+        max_upload_size=50,
+        help="上传后可试听；转写调用 POST /api/transcribe，先预览返回的 text，再选择替换或追加。",
         key="sim_audio_upload",
+        on_change=_audio_changed,
       )
       if audio_upload is not None:
         audio_bytes = audio_upload.getvalue()
+        st.caption(f"{audio_upload.name} · {len(audio_bytes) / 1024 / 1024:.2f} MB · 上限 50 MB")
         st.audio(audio_bytes, format=audio_upload.type or "audio/wav")
         st.button(
-          "转写音频并填入授课文本",
+          "转写音频（先预览）",
           width="stretch",
           key="sim_transcribe_btn",
           on_click=_transcribe_sim_audio,
+          disabled=len(audio_bytes) > 50 * 1024 * 1024,
         )
       if st.session_state.get("sim_transcribe_notice"):
         st.caption(st.session_state["sim_transcribe_notice"])
+      if st.session_state.get("sim_transcript"):
+        transcript = comp.draft_widget("text_area", "检查并编辑转写结果", key="sim_transcript", height=150)
+        st.download_button("下载完整转写文本", transcript, file_name="transcript.txt", mime="text/plain")
+        previous = st.session_state.get("sim_teacher_input", "").strip()
+        combined = len(previous) + len(transcript) + (2 if previous else 0)
+        truncate = False
+        if max(combined, len(transcript)) > 5000:
+          st.warning("回填授课文本最多 5,000 字。请编辑缩短，或确认截取；完整转写仍可下载。")
+          truncate = st.checkbox("允许只回填前 5,000 字", key="sim_transcribe_truncate")
+        replace_col, append_col = st.columns(2)
+        with replace_col:
+          st.button("替换授课文本", on_click=_apply_transcript, disabled=not transcript.strip() or (len(transcript) > 5000 and not truncate), key="sim_transcript_replace", width="stretch")
+        with append_col:
+          st.button("追加到末尾", on_click=_apply_transcript, args=(True,), disabled=not transcript.strip() or (combined > 5000 and not truncate), key="sim_transcript_append", width="stretch")
       st.button(
         "开始模拟授课",
         type="primary", width="stretch",
@@ -897,25 +929,73 @@ def _extract_docx_text(raw):
   """仅用标准库提取 DOCX 正文与表格文字，不新增第三方依赖。"""
   try:
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+      entry = archive.getinfo("word/document.xml")
+      if entry.file_size > 20 * 1024 * 1024:
+        raise ValueError("DOCX 正文解压后超过 20 MB，请拆分文档。")
+      if entry.flag_bits & 1:
+        raise ValueError("不支持加密 DOCX，请另存为未加密文件。")
       xml_bytes = archive.read("word/document.xml")
+    if b"<!DOCTYPE" in xml_bytes or b"<!ENTITY" in xml_bytes:
+      raise ValueError("DOCX 含不支持的 XML 声明。")
     root = ET.fromstring(xml_bytes)
   except (KeyError, OSError, ET.ParseError, zipfile.BadZipFile):
-    return None
+    raise ValueError("DOCX 已损坏或不是有效的 Word 文档。")
   ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
   lines = []
-  for paragraph in root.iter(f"{ns}p"):
-    text = "".join(node.text or "" for node in paragraph.iter(f"{ns}t")).strip()
-    if text:
-      lines.append(text)
-  return "\n".join(lines).strip() or None
+  def paragraph_text(paragraph):
+    return "".join(node.text or "" if node.tag == f"{ns}t" else "\t" if node.tag == f"{ns}tab" else "\n" if node.tag in (f"{ns}br", f"{ns}cr") else "" for node in paragraph.iter()).strip()
+
+  def blocks(parent):
+    for child in parent:
+      if child.tag == f"{ns}p":
+        text = paragraph_text(child)
+        if text:
+          lines.append(text)
+      elif child.tag == f"{ns}tbl":
+        for row in child.findall(f"{ns}tr"):
+          cells = [" / ".join(paragraph_text(p) for p in cell.iter(f"{ns}p")) for cell in row.findall(f"{ns}tc")]
+          if any(cells):
+            lines.append(" | ".join(cells))
+      else:
+        blocks(child)
+  body = root.find(f"{ns}body")
+  if body is not None:
+    blocks(body)
+  result = "\n".join(lines).strip()
+  if not result:
+    raise ValueError("文档没有可提取文字，可能为空或仅含图片；暂不支持 OCR。")
+  return result
 
 
 def _read_lesson_upload(uploaded):
   """按扩展名读取诊断页上传文件，统一返回（纯文本, 读取方式）。"""
   raw = uploaded.getvalue()
+  if len(raw) > 10 * 1024 * 1024:
+    raise ValueError("教学文件超过 10 MB，请拆分后上传。")
+  if not raw:
+    raise ValueError("文件为空，请重新选择。")
   if uploaded.name.lower().endswith(".docx"):
     return _extract_docx_text(raw), "DOCX"
-  return _decode_txt(raw)
+  text, encoding = _decode_txt(raw)
+  if text is None:
+    raise ValueError("TXT 无法解码，请另存为 UTF-8 或 GB18030。")
+  if not text.strip():
+    raise ValueError("TXT 没有可提取文字。")
+  return text, encoding
+
+
+def _apply_lesson_upload():
+  pending = st.session_state.get("diag_upload_pending")
+  if pending:
+    st.session_state["diag_lesson_text"] = pending["text"][:20000]
+    st.session_state["diag_input_source"] = pending["source"]
+    st.session_state["diag_upload_notice"] = f"已填入 {min(len(pending['text']), 20000):,} 字。"
+    st.session_state.pop("diag_upload_pending", None)
+
+
+def _discard_lesson_upload():
+  st.session_state.pop("diag_upload_pending", None)
+  st.session_state["diag_upload_notice"] = "已保留原课例文字，未替换。"
 
 
 def _use_diagnosis_sample():
@@ -962,6 +1042,41 @@ def _normalise_diagnosis_result(result):
 def _clear_diagnosis_chat():
   """只清空教师对话，不影响课例和已生成的诊断报告。"""
   st.session_state["diag_chat_history"] = []
+  st.session_state["diag_chat_error"] = ""
+  st.session_state["diag_chat_preview"] = ""
+
+
+def _set_chat_example(text):
+  st.session_state["diag_chat_question"] = text
+
+
+def _send_diagnosis_chat():
+  question = st.session_state.get("diag_chat_question", "").strip()
+  if not question:
+    return
+  history = st.session_state.setdefault("diag_chat_history", [])
+  lesson = st.session_state.get("diag_lesson_text", "")
+  current_report = st.session_state.get("diag_result") if lesson == st.session_state.get("diag_input_snapshot") else None
+  prompt = _diagnosis_chat_prompt(question, history, lesson, current_report)
+  response = comp.api_gate(
+    endpoint=config.API_ENDPOINTS["diag_report"],
+    payload=_agent_payload("diag_report", prompt),
+    mock_result={"answer": _diagnosis_chat_mock(question), "agent_type": config.AGENT_TYPES["diag_report"]},
+  )
+  status, detail = st.session_state.get("backend_status") or ("down", "未知错误")
+  if status not in {"ok", "mock"}:
+    st.session_state["diag_chat_error"] = f"发送失败：{detail}。问题已保留，可以重试；未添加重复消息。"
+    st.session_state["diag_chat_preview"] = _diagnosis_chat_mock(question)
+    return
+  answer = response.get("answer", "")
+  if not isinstance(answer, str) or not answer.strip():
+    st.session_state["diag_chat_error"] = "发送失败：回答为空，问题已保留。"
+    return
+  history.extend([{"role": "teacher", "content": question},
+                  {"role": "assistant", "content": answer.strip(), "source": "mock" if status == "mock" else "real"}])
+  st.session_state["diag_chat_question"] = ""
+  st.session_state["diag_chat_error"] = ""
+  st.session_state["diag_chat_preview"] = ""
 
 
 def _diagnosis_chat_prompt(question, history, lesson_text, diagnosis_result):
@@ -1030,25 +1145,35 @@ def _diagnosis_chat_html(value):
 def _render_diagnosis_chat():
   """教师就课堂问题与 classroom_diagnosis 智能体连续对话。"""
   history = st.session_state.setdefault("diag_chat_history", [])
-  with st.container(border=True):
+  st.markdown('<div id="teacher-dialogue"></div>', unsafe_allow_html=True)
+  with st.container(border=True, key="diag_chat_panel"):
     title_col, clear_col = st.columns([5, 1])
     with title_col:
       comp.section_title("教师—智能体对话", "围绕课堂问题连续追问，自动关联当前课例与诊断结论")
     with clear_col:
+      clear_confirmed = st.checkbox("确认清空", key="diag_chat_confirm")
       st.button(
         "清空对话", type="secondary", width="stretch",
-        disabled=not bool(history), on_click=_clear_diagnosis_chat,
+        disabled=not bool(history) or not clear_confirmed, on_click=_clear_diagnosis_chat,
         key="diag_chat_clear",
       )
 
+    lesson = st.session_state.get("diag_lesson_text", "")
+    current_report = bool(st.session_state.get("diag_result")) and lesson == st.session_state.get("diag_input_snapshot")
+    st.caption(f"本轮上下文：{'当前课例' if lesson.strip() else '无课例'} · {'匹配的诊断报告' if current_report else '不使用旧报告'} · 最近 {min(len(history), 6)} 条对话。完整记录保留，可下载备份。")
     if history:
+      visible = st.session_state.get("diag_chat_visible", 12)
+      if len(history) > visible and st.button("加载更早记录", key="diag_chat_more"):
+        visible += 12
+        st.session_state["diag_chat_visible"] = visible
+      st.caption(f"当前显示最近 {min(visible, len(history))} / {len(history)} 条消息")
       bubbles = []
-      for item in history[-12:]:
+      for item in history[-visible:]:
         if not isinstance(item, dict):
           continue
         is_teacher = item.get("role") == "teacher"
         row_class = "is-teacher" if is_teacher else "is-agent"
-        role_label = "教师" if is_teacher else "诊断智能体"
+        role_label = "教师" if is_teacher else "诊断智能体 · Mock 示例" if item.get("source") == "mock" else "诊断智能体" if item.get("source") == "real" else "诊断智能体 · 历史记录（来源未标注）"
         icon_name = "users" if is_teacher else "brain"
         content = _diagnosis_chat_html(item.get("content", ""))
         bubbles.append(
@@ -1065,38 +1190,19 @@ def _render_diagnosis_chat():
         icon_name="brain", tone=config.COLORS["accent"], light=True,
       )
 
-    with st.form("diag_teacher_chat_form", clear_on_submit=True):
-      question = st.text_area(
+    for i, example in enumerate(["学生小组探究时只抄答案，如何调整任务？", "怎样判断学生真的理解了跨学科概念？"]):
+      st.button(example, key=f"diag_chat_example_{i}", on_click=_set_chat_example, args=(example,))
+    if st.session_state.get("diag_chat_error"):
+      st.error(st.session_state["diag_chat_error"])
+      if st.session_state.get("diag_chat_preview"):
+        with st.expander("参考示例（Mock，非真实回答，未计入对话）"):
+          st.write(st.session_state["diag_chat_preview"])
+    question = comp.draft_widget("text_area",
         "描述你在课堂中遇到的问题",
         placeholder="请尽量说明学段、教学内容和学生的具体表现……",
         height=100, max_chars=2000, key="diag_chat_question",
       )
-      submitted = st.form_submit_button(
-        "发送给诊断智能体", type="primary", width="stretch",
-      )
-    if submitted and question.strip():
-      prompt = _diagnosis_chat_prompt(
-        question, history,
-        st.session_state.get("diag_lesson_text", ""),
-        st.session_state.get("diag_result"),
-      )
-      response = comp.api_gate(
-        endpoint=config.API_ENDPOINTS["diag_report"],
-        payload=_agent_payload("diag_report", prompt),
-        mock_result={
-          "answer": _diagnosis_chat_mock(question),
-          "agent_type": config.AGENT_TYPES["diag_report"],
-        },
-      )
-      answer = response.get("answer") if isinstance(response, dict) else None
-      if not isinstance(answer, str) or not answer.strip():
-        answer = _diagnosis_chat_mock(question)
-      history.extend([
-        {"role": "teacher", "content": question.strip()},
-        {"role": "assistant", "content": answer.strip()},
-      ])
-      st.session_state["diag_chat_history"] = history[-40:]
-      st.rerun()
+    st.button("发送给诊断智能体" if not st.session_state.get("diag_chat_error") else "重试发送", type="primary", width="stretch", key="diag_chat_send", on_click=_send_diagnosis_chat, disabled=not question.strip())
 
 
 def page_diagnosis():
@@ -1112,13 +1218,16 @@ def page_diagnosis():
   st.session_state.setdefault("diag_upload_notice", "")
   st.session_state.setdefault("diag_chat_history", [])
 
-  left, right = st.columns([1, 1.6])
+  st.markdown('[前往教师对话](#teacher-dialogue)')
+  with st.container(key="diag_layout"):
+    left, right = st.columns([1, 1.6])
   with left:
     with st.container(border=True):
       comp.section_title("课例文本输入", "粘贴文本、上传 TXT / DOCX 或使用内置样例")
       uploaded = st.file_uploader(
         "上传教学设计或课堂对话文本",
         type=["txt", "docx"],
+        max_upload_size=10,
         help="TXT 支持 UTF-8、UTF-8 BOM、GB18030；DOCX 由前端提取正文和表格文字，随后仅发送纯文本。",
         key="diag_upload",
       )
@@ -1126,27 +1235,32 @@ def page_diagnosis():
         raw = uploaded.getvalue()
         signature = (uploaded.name, len(raw), hash(raw))
         if signature != st.session_state["diag_upload_signature"]:
-          decoded, encoding = _read_lesson_upload(uploaded)
-          if decoded is None:
-            st.session_state["diag_upload_notice"] = (
-              "无法读取文件内容：TXT 请另存为 UTF-8 或 GB18030；DOCX 请确认文件未损坏且包含可提取文字。"
-            )
-          else:
+          st.session_state.pop("diag_upload_pending", None)
+          try:
+            decoded, encoding = _read_lesson_upload(uploaded)
             truncated = len(decoded) > 20000
-            st.session_state["diag_lesson_text"] = decoded[:20000]
             file_kind = "DOCX" if uploaded.name.lower().endswith(".docx") else "TXT"
-            st.session_state["diag_input_source"] = f"{file_kind} 上传：{uploaded.name}"
-            suffix = "；已自动截取前 20,000 字" if truncated else ""
-            st.session_state["diag_upload_notice"] = f"已按 {encoding} 读取{suffix}。"
+            st.session_state["diag_upload_pending"] = {"text": decoded, "source": f"{file_kind} 上传：{uploaded.name}"}
+            suffix = "；填入时保留前 20,000 字" if truncated else ""
+            notice = f"已按 {encoding} 提取 {len(decoded):,} 字{suffix}。"
+            if not st.session_state.get("diag_lesson_text", "").strip():
+              _apply_lesson_upload()
+            st.session_state["diag_upload_notice"] = notice
+          except ValueError as exc:
+            st.session_state["diag_upload_notice"] = f"读取失败：{exc} 原课例未改变。"
           st.session_state["diag_upload_signature"] = signature
 
       if st.session_state["diag_upload_notice"]:
-        if st.session_state["diag_lesson_text"]:
+        if not st.session_state["diag_upload_notice"].startswith("读取失败"):
           st.caption(st.session_state["diag_upload_notice"])
         else:
           st.error(st.session_state["diag_upload_notice"])
+      if st.session_state.get("diag_upload_pending"):
+        st.warning("已有课例文字。是否用新文件内容替换？")
+        st.button("确认替换课例", on_click=_apply_lesson_upload, key="diag_upload_apply", width="stretch")
+        st.button("保留原课例", on_click=_discard_lesson_upload, key="diag_upload_cancel", width="stretch")
 
-      lesson_text = st.text_area(
+      lesson_text = comp.draft_widget("text_area",
         "粘贴或编辑课例文本",
         height=230,
         max_chars=20000,
@@ -1198,7 +1312,7 @@ def page_diagnosis():
           _trace_dialog()
 
   with right:
-    with st.container(border=True):
+    with st.container(border=True, key="diag_report_reading"):
       comp.section_title("诊断报告")
       rep = st.session_state["diag_result"]
       st.session_state["diag_ready"] = bool(rep)
@@ -1376,9 +1490,9 @@ def page_workbench():
   with left:
     with st.container(border=True):
       comp.section_title("设计输入")
-      grade = st.selectbox("学段", ["小学", "初中", "高中"], index=1, key="ws_grade")
-      topic = st.text_input("主题", value="碳中和·跨学科项目式学习", key="ws_topic")
-      hours = st.slider("课时", min_value=1, max_value=8, value=4, key="ws_hours")
+      grade = comp.draft_widget("selectbox", "学段", options=["小学", "初中", "高中"], index=1, key="ws_grade")
+      topic = comp.draft_widget("text_input", "主题", value="碳中和·跨学科项目式学习", key="ws_topic")
+      hours = comp.draft_widget("slider", "课时", min_value=1, max_value=8, value=4, key="ws_hours")
       st.markdown('<div style="height:.3rem;"></div>', unsafe_allow_html=True)
 
       current_context = _ws_context(grade, topic, hours)
@@ -1521,7 +1635,7 @@ def page_workbench():
       else:
         tab_edit, tab_preview = st.tabs(["编辑 Markdown", "预览教案"])
         with tab_edit:
-          edited_lesson = st.text_area(
+          edited_lesson = comp.draft_widget("text_area",
             "教案 Markdown（可直接编辑）",
             height=520,
             key="ws_lesson_editor",
@@ -1614,9 +1728,27 @@ def _import_diagnosis_to_research():
   pain = _diagnosis_to_research_pain()
   if not pain:
     return
+  _queue_research_input(pain, "最近一次诊断结果")
+
+
+def _queue_research_input(text, source):
+  st.session_state["research_pending"] = {"text": text[:2000], "source": source}
+  if not st.session_state.get("research_pain", "").strip():
+    _apply_research_input()
+
+
+def _apply_research_input():
+  pending = st.session_state.pop("research_pending", None)
+  if not pending:
+    return
+  pain = pending["text"]
   st.session_state["research_pain"] = pain
   st.session_state["research_imported_pain"] = pain
-  st.session_state["research_input_source"] = "最近一次诊断结果"
+  st.session_state["research_input_source"] = pending["source"]
+
+
+def _cancel_research_input():
+  st.session_state.pop("research_pending", None)
 
 
 def _normalise_research_result(result):
@@ -1651,17 +1783,23 @@ def page_research():
   st.session_state.setdefault("research_input_source", "独立输入")
   st.session_state.setdefault("research_generated_source", "")
   st.session_state.setdefault("research_imported_pain", "")
-  # 返回本页时，Streamlit 可能已清理文本控件 key；恢复内置教学痛点样例。
-  if not st.session_state.get("research_pain"):
-    st.session_state["research_pain"] = DEFAULT_RESEARCH_PAIN
-  st.session_state["research_pain_initialized"] = True
 
-  with st.container(border=True):
-    comp.section_title("教学痛点输入", "课堂数据归因分析 · 图谱关联科研方法子域")
-    pain = st.text_area(
-      "描述你在教学中遇到的痛点",
+  with st.container(border=True, key="research_prepare"):
+    comp.section_title("教育研究问题输入", "从教学现象出发 · 图谱关联科研方法子域")
+    st.markdown('<div class="dsh-research-hints"><span>学段 · 在哪个年级？</span><span>课堂现象 · 发生了什么？</span><span>学生表现 · 有哪些证据？</span><span>教师观察 · 想弄清什么？</span></div>', unsafe_allow_html=True)
+    st.button("载入研究问题示例", key="research_sample", on_click=_queue_research_input, args=(DEFAULT_RESEARCH_PAIN, "内置示例"))
+    if st.session_state.get("research_pending"):
+      st.warning("已有研究问题。确认替换后，旧方案仍会保留并标注输入已变化。")
+      st.button("确认替换研究问题", key="research_apply", on_click=_apply_research_input)
+      st.button("保留原研究问题", key="research_cancel", on_click=_cancel_research_input)
+    pain = comp.draft_widget("text_area",
+      "回想你的教学实践，有哪些现象或问题值得进一步研究？",
       height=150,
       max_chars=2000,
+      placeholder=(
+        "例如：初中科学课的小组探究中，部分学生只记录答案，很少解释推理过程。"
+        "请尽量说明学段、课堂现象、学生表现和你的观察。"
+      ),
       key="research_pain",
     )
     imported = st.session_state["research_imported_pain"]
@@ -1672,6 +1810,8 @@ def page_research():
 
     c_import, c_generate = st.columns([1, 1.5])
     with c_import:
+      if st.session_state.get("diag_result") and st.session_state.get("diag_lesson_text") != st.session_state.get("diag_input_snapshot"):
+        st.caption("注意：最近诊断基于旧课例，带入前请核对内容。")
       st.button(
         "带入最近诊断结果",
         width="stretch",
@@ -1693,10 +1833,11 @@ def page_research():
           "exp_md": EXP_DRAFT_MD,
         }
         question = (
-          "请作为 STEM 教育科研智能体，把下面的真实教学痛点转化为一份可执行的小型教育研究方案。"
+          "请作为 STEM 教育科研智能体，把下面教学实践中值得研究的现象或问题，"
+          "转化为一份可执行的小型教育研究方案。"
           "请包含研究选题与依据、研究问题、文献综述提纲、研究方法、样本与过程、"
           "问卷或访谈工具初稿、数据分析思路和预期成果。\n\n"
-          f"教学痛点：\n{pain[:2000]}"
+          f"教学现象或研究问题：\n{pain[:2000]}"
         )
         result = comp.api_gate(
           endpoint=config.API_ENDPOINTS["research_plan"],
@@ -1713,27 +1854,31 @@ def page_research():
   st.session_state["research_ready"] = bool(result)
   if result:
     if pain != st.session_state["research_input_snapshot"]:
-      st.warning("教学痛点已变化，当前仍显示上一次方案；请重新生成。")
+      st.warning("研究问题已变化，当前仍显示上一次方案；请重新生成。")
     generated_source = st.session_state["research_generated_source"] or "独立输入"
     st.caption(f"方案来源：{generated_source} · 已缓存，切换标签页不会重复请求")
-    if comp.is_agent_response(result):
-      comp.section_title("智能体完整研究方案", "真实后端统一文本回答")
-      st.markdown(result["answer"])
-      _render_agent_sources(result)
-    else:
-      t1, t2, t3 = st.tabs(["研究选题", "文献综述提纲", "问卷与实验设计初稿"])
-      with t1:
-        st.markdown(result["topic_md"])
-      with t2:
-        st.markdown(result["lit_md"])
-      with t3:
-        st.markdown(result["survey_md"])
-        st.divider()
-        st.markdown(result["exp_md"])
+    text = result["answer"] if comp.is_agent_response(result) else "\n\n".join(result[k] for k in ("topic_md", "lit_md", "survey_md", "exp_md"))
+    st.download_button("下载研究方案", text, file_name="research-plan.md", mime="text/markdown", key="research_download")
+    with st.container(key="research_reading"):
+      if comp.is_agent_response(result):
+        comp.section_title("智能体完整研究方案", "真实后端统一文本回答")
+        st.markdown(result["answer"])
+        _render_agent_sources(result)
+      else:
+        st.caption("Mock 示例方案 · 非真实智能体回答")
+        t1, t2, t3 = st.tabs(["研究选题", "文献综述提纲", "问卷与实验设计初稿"])
+        with t1:
+          st.markdown(result["topic_md"])
+        with t2:
+          st.markdown(result["lit_md"])
+        with t3:
+          st.markdown(result["survey_md"])
+          st.divider()
+          st.markdown(result["exp_md"])
   else:
     comp.info_card(
       "等待生成",
-      ["输入教学痛点并点击“生成研究方案”，将一次性输出：",
+      ["输入值得研究的教学现象或问题并点击“生成研究方案”，将一次性输出：",
        "研究选题（含选题依据与创新点）、文献综述提纲、问卷与实验设计初稿。",
        "教育科研方法子图将关联教学问题、研究选题与设计型研究范式。"],
       icon_name="timer", tone=config.COLORS["text_3"],

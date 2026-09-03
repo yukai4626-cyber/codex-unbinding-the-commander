@@ -20,6 +20,7 @@ import html
 import json
 import math
 import uuid
+from datetime import datetime, timezone
 
 import streamlit as st
 import requests
@@ -613,6 +614,69 @@ footer { visibility:hidden; }
   border-radius:8px; font-size:.74rem; font-weight:700;
 }
 .dsh-foot { font-size:.7rem; color:#4A3D31; padding-top:.4rem; line-height:1.6; }
+/* 本轮仅作用于准备、诊断、对话、科研区域，不覆盖侧栏或工作台。 */
+.st-key-sim_prepare, .st-key-diag_layout, .st-key-diag_chat_panel,
+.st-key-research_prepare, .st-key-research_reading { margin-bottom:24px; }
+.st-key-sim_prepare [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-diag_chat_panel, .st-key-research_prepare { border-radius:12px; }
+.st-key-sim_prepare button p, .st-key-diag_layout button p,
+.st-key-diag_chat_panel button p, .st-key-research_prepare button p {
+  word-break:normal; overflow-wrap:normal; writing-mode:horizontal-tb;
+  line-height:1.5; font-size:15px;
+}
+.st-key-diag_report_reading .dsh-info,
+.st-key-research_reading {
+  color:#f0f0f2; background-color:rgba(34,38,48,.85); background-image:var(--noise);
+  border-radius:12px; padding:24px; line-height:1.7; overflow-wrap:anywhere;
+}
+.st-key-research_reading [data-testid="stMarkdownContainer"] {
+  max-width:78ch; margin-inline:auto; color:#f0f0f2; font-size:16px;
+}
+.st-key-research_reading [data-testid="stMarkdownContainer"] p,
+.st-key-research_reading [data-testid="stMarkdownContainer"] li { color:#f0f0f2; line-height:1.7; }
+.st-key-research_reading h1, .st-key-diag_report_reading h1 { color:#fff; font-size:26px; line-height:1.45; }
+.st-key-research_reading h2, .st-key-diag_report_reading h2 { color:#fff; font-size:22px; line-height:1.5; }
+.st-key-research_reading h3, .st-key-diag_report_reading h3 { color:#fff; font-size:18px; }
+.st-key-diag_chat_panel .dsh-chat-list { gap:24px; }
+.st-key-diag_chat_panel .dsh-chat-bubble { padding:16px 24px; font-size:16px; line-height:1.7; min-width:0; }
+.st-key-diag_chat_panel .dsh-chat-row.is-agent .dsh-chat-bubble { max-height:none; overflow:visible; }
+.st-key-diag_chat_panel .dsh-chat-heading { font-size:18px; }
+.st-key-research_prepare [data-testid="stBaseButton-secondary"]:not(:disabled),
+.st-key-sim_prepare [data-testid="stBaseButton-secondary"]:not(:disabled),
+.st-key-diag_layout [data-testid="stBaseButton-secondary"]:not(:disabled),
+.st-key-diag_chat_panel [data-testid="stBaseButton-secondary"]:not(:disabled) {
+  color:#624B31 !important; border-color:#A68C69 !important; background:#FDFBF6 !important;
+}
+.st-key-sim_prepare .dsh-flow-status { color:#285B38 !important; }
+.st-key-sim_feedback_layout .dsh-fbar-head { color:#3A3129; }
+.st-key-sim_feedback_layout .dsh-flow-status { color:#624B31 !important; }
+.st-key-persistence_panel [data-testid="stCaptionContainer"] p,
+.st-key-persistence_panel .dsh-flow-status { color:#F0F0F2 !important; }
+.st-key-persistence_panel summary,
+.st-key-persistence_panel summary:hover,
+.st-key-persistence_panel summary:focus { background:#343842 !important; color:#fff !important; }
+.st-key-persistence_panel summary p { color:#fff !important; }
+.st-key-persistence_panel [data-testid="stFileUploader"] button:not(:disabled),
+.st-key-diag_layout [data-testid="stFileUploader"] button:not(:disabled),
+.st-key-sim_prepare [data-testid="stFileUploader"] button:not(:disabled) { color:#624B31 !important; }
+.dsh-research-hints { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 16px; }
+.dsh-research-hints span { background:#FDFBF6; border:1px solid #D9D0C0; color:#3A3129; padding:8px 12px; border-radius:8px; }
+.st-key-diag_layout, .st-key-sim_feedback_layout { container-type:inline-size; }
+@container (max-width: 760px) {
+  .st-key-diag_layout > [data-testid="stHorizontalBlock"],
+  .st-key-sim_feedback_layout > [data-testid="stHorizontalBlock"] { flex-direction:column; }
+  .st-key-diag_layout > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+  .st-key-sim_feedback_layout > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { width:100%; flex:1 1 100%; }
+}
+@media (max-width:900px) {
+  .st-key-diag_layout [data-testid="stHorizontalBlock"],
+  .st-key-diag_chat_panel [data-testid="stHorizontalBlock"],
+  .st-key-research_prepare [data-testid="stHorizontalBlock"],
+  .st-key-sim_feedback_layout [data-testid="stHorizontalBlock"] { flex-direction:column; }
+  .st-key-diag_layout [data-testid="stColumn"], .st-key-diag_chat_panel [data-testid="stColumn"],
+  .st-key-research_prepare [data-testid="stColumn"], .st-key-sim_feedback_layout [data-testid="stColumn"] { width:100%; flex:1 1 100%; min-width:0; }
+  .st-key-research_reading, .st-key-diag_chat_panel .dsh-chat-bubble { padding:16px; }
+}
 </style>
 """
 
@@ -629,6 +693,27 @@ def safe_text(value) -> str:
     由调用方显式使用本函数，避免破坏现有 ``<b>`` 等可信样式。
     """
     return html.escape("" if value is None else str(value), quote=True)
+
+
+def draft_widget(kind, label, *, key, **kwargs):
+    """业务键不绑定控件；离页后 Streamlit 仅清理 _ui_ 临时键。"""
+    widget_key = "_ui_" + key
+    if kind == "selectbox" and key in st.session_state and st.session_state[key] not in kwargs.get("options", []):
+        st.session_state[key] = kwargs["options"][0]
+        st.warning("已保存的选项不再可用，已恢复为当前默认选项；请核对后继续。")
+    if key in st.session_state:
+        st.session_state[widget_key] = st.session_state[key]
+        kwargs.pop("value", None)
+        kwargs.pop("index", None)
+
+    def commit():
+        st.session_state[key] = st.session_state[widget_key]
+        if key == "ws_lesson_editor":
+            st.session_state["ws_lesson"] = st.session_state[widget_key]
+
+    value = getattr(st, kind)(label, key=widget_key, on_change=commit, **kwargs)
+    st.session_state[key] = value
+    return value
 
 
 # =====================================================================
@@ -701,7 +786,7 @@ PERSISTED_STATE_KEYS = (
     "flow_status", "sim_feedback", "sim_signals", "sim_agent_result",
     "diag_ready", "diag_lesson_text", "diag_result", "diag_trace",
     "diag_input_snapshot", "diag_input_source", "diag_generated_source",
-    "diag_chat_history",
+    "diag_chat_history", "diag_chat_question", "sim_transcript",
     "ws_stage", "ws_lesson", "ws_lesson_editor", "ws_grade", "ws_topic",
     "ws_hours", "ws_itrs", "ws_stem", "ws_check_conclusion",
     "ws_design_context", "ws_agent_result",
@@ -762,16 +847,120 @@ def _load_persistent_state(workspace_id: str):
             headers=_persistence_headers(),
             timeout=(3, 12),
         )
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as exc:
+        st.session_state["persistence_error"] = f"连接失败：{type(exc).__name__}"
         return None
     if not 200 <= response.status_code < 300:
+        st.session_state["persistence_error"] = f"HTTP {response.status_code}"
         return None
     try:
         data = response.json()
     except ValueError:
         return None
     state = data.get("state") if isinstance(data, dict) else None
-    return state if isinstance(state, dict) else {}
+    try:
+        return validate_state(state)
+    except ValueError as exc:
+        st.session_state["persistence_error"] = str(exc)
+        return None
+
+
+BACKUP_MAX_BYTES = 10 * 1024 * 1024
+_DICT_KEYS = {"flow", "sim_agent_result", "diag_result", "diag_trace",
+              "ws_design_context", "ws_agent_result", "research_result"}
+_LIST_KEYS = {"sim_feedback", "sim_signals", "diag_chat_history", "ws_itrs", "ws_stem"}
+_BOOL_KEYS = {"sim_started", "diag_ready", "research_ready"}
+_INT_KEYS = {"sim_round", "ws_stage", "ws_hours"}
+
+
+def validate_state(state):
+    """外部档案只接受白名单、有限大小和业务类型；不执行任何导入内容。"""
+    if not isinstance(state, dict):
+        raise ValueError("档案必须包含 state 对象。")
+    if len(json.dumps(state, ensure_ascii=False).encode("utf-8")) > BACKUP_MAX_BYTES:
+        raise ValueError("档案超过 10 MB，请减少内容后重试。")
+    cleaned = {}
+    for key in PERSISTED_STATE_KEYS:
+        if key not in state:
+            continue
+        value = state[key]
+        expected = dict if key in _DICT_KEYS else list if key in _LIST_KEYS else bool if key in _BOOL_KEYS else int if key in _INT_KEYS else str
+        nullable = key in (_DICT_KEYS - {"flow"}) or key in {"sim_feedback", "sim_signals", "ws_lesson", "diag_input_snapshot", "research_input_snapshot"}
+        if value is None and nullable:
+            cleaned[key] = [] if key == "diag_chat_history" else None
+            continue
+        if type(value) is not expected:
+            raise ValueError(f"档案字段 {key} 类型不正确。")
+        cleaned[key] = copy.deepcopy(value)
+    for key, allowed in {"nav_radio": [x["id"] for x in config.NAV_ITEMS],
+                         "ws_grade": ["小学", "初中", "高中"],
+                         "kg_domain": ["all"] + config.KG_SUBDOMAIN_IDS}.items():
+        if key in cleaned and cleaned[key] not in allowed:
+            raise ValueError(f"档案字段 {key} 的选项无效。")
+    for key, lower, upper in [("ws_stage", 0, 3), ("ws_hours", 1, 8), ("sim_round", 0, 1000000)]:
+        if key in cleaned and not lower <= cleaned[key] <= upper:
+            raise ValueError(f"档案字段 {key} 超出范围。")
+    for key, limit in [("diag_lesson_text", 20000), ("research_pain", 2000), ("diag_chat_question", 2000)]:
+        if len(cleaned.get(key, "")) > limit:
+            raise ValueError(f"档案字段 {key} 超过 {limit:,} 字。")
+    for message in cleaned.get("diag_chat_history", []):
+        if not isinstance(message, dict) or message.get("role") not in {"teacher", "assistant"} or not isinstance(message.get("content"), str):
+            raise ValueError("对话记录格式不正确。")
+    flow = cleaned.get("flow")
+    if flow is not None and any(type(flow.get(k)) not in (int, float) or not 0 <= flow[k] <= 100 for k in ("load", "engage", "confuse", "flow")):
+        raise ValueError("心流指标格式不正确。")
+    for key in ("sim_feedback", "sim_signals"):
+        if any(not isinstance(x, dict) for x in cleaned.get(key) or []):
+            raise ValueError(f"档案字段 {key} 格式不正确。")
+    context = cleaned.get("ws_design_context")
+    if context and (context.get("grade") not in {"小学", "初中", "高中"} or not isinstance(context.get("topic"), str) or type(context.get("hours")) is not int):
+        raise ValueError("教案上下文格式不正确。")
+    for key in ("ws_itrs", "ws_stem"):
+        for row in cleaned.get(key) or []:
+            if not isinstance(row, (list, tuple)) or len(row) != 3 or not isinstance(row[0], str) or type(row[1]) not in (int, float) or not 0 <= row[1] <= 100 or not isinstance(row[2], str):
+                raise ValueError("素养评分格式不正确。")
+            if len(row[2]) != 7 or not row[2].startswith("#") or any(c not in "0123456789abcdefABCDEF" for c in row[2][1:]):
+                raise ValueError("素养配色不是有效的十六进制颜色。")
+    trace = cleaned.get("diag_trace")
+    if trace:
+        if not isinstance(trace.get("nodes"), list) or not isinstance(trace.get("edges"), list):
+            raise ValueError("溯源图谱格式不正确。")
+        for node in trace["nodes"]:
+            if not isinstance(node, dict) or not isinstance(node.get("id"), str) or not isinstance(node.get("label"), str) or type(node.get("size", 18)) not in (int, float):
+                raise ValueError("图谱节点格式不正确。")
+        ids = {n["id"] for n in trace["nodes"]}
+        for edge in trace["edges"]:
+            if not isinstance(edge, (list, tuple)) or len(edge) < 2 or any(not isinstance(x, str) or x not in ids for x in edge[:2]):
+                raise ValueError("图谱关系格式不正确。")
+    result = cleaned.get("diag_result")
+    if result and (not isinstance(result.get("problems"), list) or any(not isinstance(x, dict) for x in result["problems"]) or not isinstance(result.get("conclusion"), str)):
+        raise ValueError("诊断报告格式不正确。")
+    result = cleaned.get("research_result")
+    if result and not (isinstance(result.get("answer"), str) or all(isinstance(result.get(k), str) for k in ("topic_md", "lit_md", "survey_md", "exp_md"))):
+        raise ValueError("研究方案格式不正确。")
+    if result and "answer" in result and not is_agent_response(result):
+        raise ValueError("研究方案缺少真实回答来源标识或 agent_type。")
+    return cleaned
+
+
+def backup_bytes():
+    return json.dumps({"format_version": 1, "exported_at": datetime.now(timezone.utc).isoformat(),
+                       "state": _persistent_payload()}, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def parse_backup(raw):
+    if len(raw) > BACKUP_MAX_BYTES:
+        raise ValueError("备份超过 10 MB。")
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except (ValueError, UnicodeError, RecursionError) as exc:
+        raise ValueError("备份不是有效的 UTF-8 JSON 文件。") from exc
+    if not isinstance(data, dict) or type(data.get("format_version", 1)) is not int or data.get("format_version", 1) != 1:
+        raise ValueError("不支持的备份版本。")
+    state = data.get("state")
+    if isinstance(state, dict) and set(state) - set(PERSISTED_STATE_KEYS):
+        raise ValueError("备份含非业务字段，未导入。")
+    return validate_state(state)
 
 
 def _restore_persistent_state(state: dict):
@@ -779,8 +968,6 @@ def _restore_persistent_state(state: dict):
         if key not in state:
             continue
         value = copy.deepcopy(state[key])
-        if key == "ws_design_context" and isinstance(value, list):
-            value = tuple(value)
         st.session_state[key] = value
 
 
@@ -789,9 +976,13 @@ def _save_persistent_state():
         return False
     workspace_id = _workspace_id()
     payload = _persistent_payload()
+    if len(json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")) > BACKUP_MAX_BYTES:
+        st.session_state["persistence_status"] = "保存失败：档案超过 10 MB，请先下载备份并整理内容，不会静默截断。"
+        return False
     fingerprint = hash(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
     if fingerprint == st.session_state.get("persistence_fingerprint"):
         return True
+    st.session_state["persistence_status"] = "待保存：正在同步已提交的内容。"
     try:
         response = requests.put(
             _persistence_url(workspace_id),
@@ -802,11 +993,11 @@ def _save_persistent_state():
     except requests.exceptions.RequestException:
         st.session_state["persistence_status"] = "保存暂时失败，本次会话内容仍然保留。"
         return False
-    if not 200 <= response.status_code < 300:
-        st.session_state["persistence_status"] = "保存接口暂未就绪，本次会话内容仍然保留。"
+    if not _confirmed_write(response):
+        st.session_state["persistence_status"] = f"保存失败（HTTP {response.status_code} 或响应未确认）；请下载备份并重试。"
         return False
     st.session_state["persistence_fingerprint"] = fingerprint
-    st.session_state["persistence_status"] = "已自动保存到长期档案。"
+    st.session_state["persistence_status"] = f"已保存 · {datetime.now().strftime('%H:%M:%S')}（最新内容）"
     return True
 
 
@@ -835,41 +1026,127 @@ def _init_persistent_state():
     _save_persistent_state()
 
 
-def _clear_saved_content():
-    workspace_id = _workspace_id()
-    if st.session_state.get("persistence_available"):
-        try:
-            requests.delete(
-                _persistence_url(workspace_id),
-                headers=_persistence_headers(),
-                timeout=(3, 12),
-            )
-        except requests.exceptions.RequestException:
-            pass
+def _confirmed_write(response):
+    if not 200 <= response.status_code < 300:
+        return False
+    if response.status_code == 204:
+        return True
+    try:
+        data = response.json()
+        return isinstance(data, dict) and data.get("success") is True
+    except ValueError:
+        return False
+
+
+def _reset_business():
     for key in PERSISTED_STATE_KEYS:
         st.session_state.pop(key, None)
+    for key in list(st.session_state):
+        if key.startswith(("_ui_", "diag_upload", "sim_audio", "sim_transcribe", "research_pending", "diag_chat_", "backup_")):
+            st.session_state.pop(key, None)
     st.session_state["persistence_fingerprint"] = None
-    st.session_state["persistence_status"] = "已清除当前内容和长期档案。"
+    st.session_state.pop("persistence_remote_pending", None)
+    st.session_state.pop("persistence_confirm_clear", None)
+
+
+def _clear_saved_content(local_only=False):
+    if not local_only:
+        if config.MOCK_MODE:
+            st.session_state["persistence_status"] = "Mock 模式无法删除远端档案，可仅清空本次会话。"
+            return
+        try:
+            response = requests.delete(_persistence_url(_workspace_id()), headers=_persistence_headers(), timeout=(3, 12))
+            if not _confirmed_write(response):
+                st.session_state["persistence_status"] = f"删除失败（HTTP {response.status_code} 或响应未确认），内容未清空。"
+                return
+        except requests.exceptions.RequestException:
+            st.session_state["persistence_status"] = "删除失败：网络不可用，内容未清空。"
+            return
+    _reset_business()
+    # 脱离旧档案，防止仅清空本地时把空状态写回旧远端，或删除后重新创建它。
+    st.session_state["workspace_id"] = str(uuid.uuid4())
+    st.query_params["workspace"] = st.session_state["workspace_id"]
+    st.session_state["persistence_available"] = False
+    st.session_state["persistence_checked"] = True
+    st.session_state["persistence_status"] = "已清空本次会话，旧远端档案未修改。" if local_only else "已确认删除远端档案并清空本次会话。"
+
+
+def _retry_persistence():
+    if config.MOCK_MODE:
+        st.session_state["persistence_status"] = "Mock 模式仅保留当前会话，请下载备份。"
+        return
+    remote = _load_persistent_state(_workspace_id())
+    if remote is None:
+        st.session_state["persistence_status"] = "读取失败，未覆盖远端：" + st.session_state.get("persistence_error", "响应格式异常")
+        st.session_state["persistence_available"] = False
+        return
+    if remote:
+        st.session_state["persistence_remote_pending"] = remote
+        st.session_state["persistence_available"] = False
+        st.session_state["persistence_status"] = "已找到远端内容，请选择恢复或用本次内容覆盖。"
+    else:
+        st.session_state["persistence_available"] = True
+        st.session_state["persistence_fingerprint"] = None
+        _save_persistent_state()
+
+
+def _resolve_remote(restore):
+    remote = st.session_state.pop("persistence_remote_pending", {})
+    if restore:
+        _reset_business()
+        _restore_persistent_state(remote)
+    st.session_state["persistence_available"] = True
+    st.session_state["persistence_fingerprint"] = None
+    _save_persistent_state()
+
+
+def _import_backup():
+    try:
+        uploaded = st.session_state.get("backup_upload")
+        if uploaded is None:
+            return
+        state = parse_backup(uploaded.getvalue())
+        _reset_business()
+        _restore_persistent_state(state)
+        st.session_state["persistence_status"] = "备份已导入当前档案；待同步远端。" if st.session_state.get("persistence_available") else "备份已恢复；仅当前会话保留，长期保存尚未连接。"
+    except (ValueError, RecursionError) as exc:
+        st.session_state["persistence_status"] = f"导入失败，原内容未改变：{exc}"
 
 
 def persistence_controls():
     """全局档案状态和手动清除入口；保持侧边栏结构不变。"""
     workspace_id = _workspace_id()
-    with st.expander("内容保存与清除", expanded=False):
+    _save_persistent_state()
+    st.caption(st.session_state.get("persistence_status", "仅当前会话"))
+    with st.expander("内容保存与清除", expanded=False, key="persistence_panel"):
         status = safe_text(st.session_state.get("persistence_status", "当前会话自动保留。"))
         st.markdown(
             f'<div class="dsh-flow-status">{icon("bookmark", 14)} {status}</div>',
             unsafe_allow_html=True,
         )
-        st.caption("档案编号已写入当前网址的 workspace 参数；重新打开同一完整网址即可恢复。")
+        st.caption("只有确认远端保存成功后，才能用同一完整网址恢复。尚未提交的输入不保证已保存，请失焦或按 Ctrl+Enter 提交。")
+        st.caption("完整 workspace 链接可能允许访问档案，请勿公开分享含真实课堂资料的链接。原始音频与文档不进入档案。")
         st.code(workspace_id, language=None)
+        st.button("重试连接与保存", on_click=_retry_persistence, key="persistence_retry")
+        if st.session_state.get("persistence_remote_pending") is not None:
+            st.warning("远端已有档案。请先下载本次备份，再选择要保留的内容。")
+            st.button("恢复远端内容（覆盖本次）", on_click=_resolve_remote, args=(True,))
+            st.button("保留本次内容（覆盖远端）", on_click=_resolve_remote, args=(False,))
+        st.download_button("下载完整 JSON 备份", backup_bytes(), file_name="stem-workspace.json", mime="application/json", key="backup_download")
+        st.file_uploader("导入 JSON 备份（最多 10 MB）", type=["json"], max_upload_size=10, key="backup_upload")
+        import_confirmed = st.checkbox("我确认用备份替换当前输入、结果和对话", key="backup_confirm")
+        st.button("确认导入备份", disabled=not (import_confirmed and st.session_state.get("backup_upload")), on_click=_import_backup)
+        st.divider()
+        confirmed = st.checkbox("我确认清除内容，已自行下载需要的备份", key="persistence_confirm_clear")
         st.button(
             "清除全部已保存内容",
             type="secondary",
             width="stretch",
             on_click=_clear_saved_content,
             key="persistence_clear_all",
+            disabled=not confirmed,
         )
+        st.button("仅清空本次会话（保留旧远端档案）", on_click=_clear_saved_content, args=(True,), disabled=not confirmed, key="persistence_clear_local")
 
 
 # =====================================================================
@@ -1538,8 +1815,10 @@ def transcribe_audio(filename: str, audio_bytes: bytes, content_type: str = "aud
     响应为 ``{"text": "..."}``。该能力与四智能体 JSON 接口相互独立。
     """
     if not audio_bytes:
+        st.session_state["sim_transcribe_notice"] = "失败：音频文件为空。"
         return None
     if config.MOCK_MODE:
+        st.session_state["sim_transcribe_notice"] = "成功（Mock 示例）：以下不是实际音频识别结果。"
         return "同学们，今天我们从校园碳足迹出发，讨论如何用跨学科知识设计减排方案。"
 
     url = f"{config.API_BASE.rstrip('/')}/{config.TRANSCRIBE_ENDPOINT.lstrip('/')}"
@@ -1552,15 +1831,22 @@ def transcribe_audio(filename: str, audio_bytes: bytes, content_type: str = "aud
                 headers=headers,
                 timeout=config.API_TIMEOUT,
             )
+    except requests.exceptions.Timeout:
+        st.session_state["sim_transcribe_notice"] = "转写失败：请求超时，请重试或手动输入。"
+        return None
     except requests.exceptions.RequestException:
+        st.session_state["sim_transcribe_notice"] = "转写失败：网络连接不可用，请重试或手动输入。"
         return None
     if not 200 <= resp.status_code < 300:
+        st.session_state["sim_transcribe_notice"] = f"转写失败：HTTP {resp.status_code}，原授课文字未改变。"
         return None
     try:
         data = resp.json()
     except ValueError:
+        st.session_state["sim_transcribe_notice"] = "转写失败：接口未返回 JSON。"
         return None
     text = data.get("text") if isinstance(data, dict) else None
+    st.session_state["sim_transcribe_notice"] = "成功：请检查转写结果，再选择替换或追加。" if isinstance(text, str) and text.strip() else "转写失败：接口未返回有效 text。"
     return text.strip() if isinstance(text, str) and text.strip() else None
 
 
@@ -1570,6 +1856,7 @@ def is_agent_response(result) -> bool:
         isinstance(result, dict)
         and result.get("_real_response") is True
         and _valid_text(result.get("answer"))
+        and isinstance(result.get("agent_type"), str)
         and result.get("agent_type") in set(config.AGENT_TYPES.values())
     )
 
