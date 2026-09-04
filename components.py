@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""components.py — 公共可复用组件沉淀（浅米纸感 + 深炭内容体系）
+"""components.py — 公共可复用组件沉淀（深色玻璃工作区体系）
 
 职责（供 pages.py / app.py 复用，本模块不承载页面业务逻辑）：
-1. inject_css()              全局内联样式：浅米纸感、暖色微光、深炭内容块、噪点肌理
+1. inject_css()              全局内联样式：深灰基底、冷蓝微光、玻璃内容块、噪点肌理
 2. icon()                    Iconify(lucide) 内联 SVG 渲染（禁 Emoji 功能图标）
 3. init_session_state()      集中初始化全部会话状态，统一守卫
 4. page_header / section_title / stat_card / info_card / tag / signal_bar  统一样式组件
@@ -11,7 +11,7 @@
 7. node_detail_panel()       下拉选择器等价实现“节点点击查看详情”
 8. api_gate()                统一接口网关（真实请求 + 字段清洗 + Mock 回退）
 
-设计规范：禁紫/靛蓝、禁纯平背景（噪点+径向微光）、侧边栏保持米色纸感，
+设计规范：禁紫/靛蓝、禁纯平背景（噪点+径向微光）、侧边栏使用深色工作台，
 禁 Emoji 功能图标、全站缓动统一 cubic-bezier(0.1,0.9,0.2,1)。
 """
 
@@ -684,6 +684,359 @@ footer { visibility:hidden; }
 def inject_css():
     """注入全局美化样式。"""
     st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(WORKSPACE_CSS, unsafe_allow_html=True)
+    st.markdown(DARK_WORKSPACE_CSS, unsafe_allow_html=True)
+
+
+WORKSPACE_CSS = """<style>
+.stApp [data-testid="stToolbar"] { display:none !important; }
+[data-testid="stSidebar"] { width:280px !important; min-width:280px !important; }
+[data-testid="stSidebar"] > div:first-child { width:280px !important; }
+.st-key-workspace { container-type:inline-size; min-width:0; }
+.st-key-workspace .dsh-page-title { color:#2F261F; font-size:28px; line-height:1.3; font-weight:700; margin:0; }
+.st-key-workspace .dsh-page-description { color:#66594B; font-size:16px; line-height:1.7; margin:8px 0 24px; }
+.st-key-page_layout > [data-testid="stHorizontalBlock"] { gap:28px; align-items:flex-start; flex-wrap:nowrap; }
+.st-key-page_layout > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex:0 0 168px; width:168px; min-width:0; }
+.st-key-page_layout > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex:1 1 0; min-width:0; width:0; }
+.st-key-page_layout [data-testid="stColumn"]:has(.st-key-function_nav) { flex:0 0 168px !important; width:168px !important; min-width:168px !important; }
+.st-key-page_layout [data-testid="stColumn"]:has(.st-key-page_content) { flex:1 1 0 !important; width:0 !important; min-width:0 !important; }
+.st-key-function_nav button { background:transparent !important; border:0 !important; border-left:2px solid transparent !important; border-radius:0 !important; box-shadow:none !important; min-height:42px; justify-content:flex-start; padding:8px 12px; color:#4A3D31 !important; }
+.st-key-function_nav [data-testid*="stBaseButton"] { background:transparent !important; border:0 !important; border-left:2px solid transparent !important; border-radius:0 !important; box-shadow:none !important; }
+.st-key-function_nav button p { color:inherit !important; white-space:normal !important; word-break:normal !important; overflow:visible; font-size:16px; text-align:left; }
+.st-key-function_nav button[kind="primary"],
+.st-key-function_nav [data-testid="stBaseButton-primary"] { border-left:2px solid #8C6E4A !important; background:rgba(140,110,74,.09) !important; color:#3A3129 !important; font-weight:700; }
+.st-key-function_nav [data-testid="stVerticalBlock"] { gap:4px; }
+.st-key-function_nav hr { border-color:#8C6E4A33; margin:12px 0; }
+.st-key-page_content { background:rgba(34,38,48,.96); color:#F0F0F2; border-radius:8px; padding:28px; min-width:0; }
+.st-key-page_content [data-testid="stVerticalBlock"], .st-key-page_content [data-testid="stColumn"] { min-width:0; }
+.st-key-page_content p, .st-key-page_content li, .st-key-page_content label, .st-key-page_content [data-testid="stWidgetLabel"] p { font-size:16px; line-height:1.7; color:#F4F1EC; }
+.st-key-page_content h1, .st-key-page_content h2, .st-key-page_content h3, .st-key-page_content .dsh-section { color:#FFF; }
+.st-key-page_content .dsh-section { font-size:20px; border:0; padding:0; margin:16px 0; background:transparent; box-shadow:none; }
+.st-key-page_content .dsh-section::before { display:none; }
+.st-key-page_content .dsh-info, .st-key-page_content .dsh-stat, .st-key-page_content .dsh-bubble,
+.st-key-page_content [data-testid="stVerticalBlockBorderWrapper"] { box-shadow:none; border:0; border-radius:0; background:transparent; }
+.st-key-page_content .dsh-info { padding:14px 0; border-bottom:1px solid #FFFFFF20; }
+.st-key-page_content .dsh-info-line, .st-key-page_content .dsh-info-title, .st-key-page_content .dsh-bubble-body { font-size:16px; line-height:1.7; }
+.st-key-page_content .dsh-info-light { background:#FDFBF6; padding:16px; color:#3A3129; }
+.st-key-page_content .dsh-info-light *, .st-key-page_content input, .st-key-page_content textarea,
+.st-key-page_content [data-baseweb="select"] * { color:#3A3129; }
+.st-key-page_content [data-testid="stBaseButton-primary"] { background:#8C6E4A !important; color:#FFF !important; border:0 !important; }
+.st-key-page_content [data-testid="stBaseButton-primary"]:hover { background:#A67C52 !important; }
+.st-key-page_content [data-testid="stBaseButton-primary"] p,
+.st-key-page_content button[kind="primary"] p { color:#FFF !important; font-weight:700; }
+.st-key-page_content [data-testid="stBaseButton-secondary"] { background:transparent !important; color:#F3EBDD !important; border:1px solid rgba(222,196,159,.72) !important; }
+.st-key-page_content [data-testid="stBaseButton-secondary"]:hover { background:rgba(222,196,159,.10) !important; border-color:#DEC49F !important; }
+.st-key-page_content [data-testid="stBaseButton-secondary"] p,
+.st-key-page_content button[kind="secondary"] p { color:#F3EBDD !important; }
+.st-key-page_content button:disabled { background:rgba(255,255,255,.045) !important; border:1px solid rgba(255,255,255,.12) !important; opacity:1 !important; }
+.st-key-page_content button:disabled p { color:#AEB2BA !important; }
+.st-key-page_content [data-testid="stFileUploader"] button p,
+.st-key-page_content [data-testid="stFileUploaderDropzone"] button p { color:#3A3129 !important; }
+.st-key-page_content button p { white-space:normal !important; word-break:normal !important; }
+.st-key-page_content button { height:auto; min-height:42px; }
+.st-key-page_content a { color:#DEC49F; }
+.st-key-page_content [data-testid="stAlert"] p { color:inherit; }
+.st-key-page_content .dsh-bubble { padding:16px 0; border-bottom:1px solid #FFFFFF20; }
+.st-key-page_content .dsh-bubble-head { flex-wrap:wrap; }
+.st-key-page_content .dsh-bubble-role { color:#F0F0F2; background:transparent !important; }
+.st-key-page_content .dsh-info-title [style*="border-left"] { border-left:0 !important; padding-left:0 !important; }
+.st-key-page_content [data-testid="stMarkdownContainer"] { overflow-wrap:anywhere; }
+.st-key-page_content [data-testid="stMarkdownContainer"] table { display:block; max-width:100%; overflow-x:auto; }
+.st-key-page_content iframe { max-width:100%; }
+.st-key-page_content [class*="st-key-reading_"] { max-width:880px; margin-inline:auto; }
+.st-key-page_content .dsh-empty { max-width:620px; padding:4px 0 18px; }
+.st-key-page_content .dsh-empty-title { color:#FFF; font-size:20px; line-height:1.45; font-weight:700; margin-bottom:6px; }
+.st-key-page_content .dsh-empty-note { color:#C9CDD5; font-size:15px; line-height:1.7; margin-bottom:14px; }
+.st-key-page_content .dsh-save-status { color:#BFC3CB; font-size:13px; line-height:1.55; border-top:1px solid rgba(255,255,255,.10); margin-top:24px; padding-top:12px; }
+.st-key-workspace .dsh-stat:hover, .st-key-workspace .dsh-info:hover, .st-key-workspace button:hover { transform:none; box-shadow:none; }
+.st-key-workspace *, .st-key-workspace *::before, .st-key-workspace *::after { animation:none; }
+.st-key-page_content [class*="st-key-view_body_"] { animation:workspaceFade 160ms cubic-bezier(.1,.9,.2,1); }
+@keyframes workspaceFade { from {opacity:0;} to {opacity:1;} }
+@media (max-width:640px) {
+  .st-key-page_layout > [data-testid="stHorizontalBlock"] { flex-wrap:wrap; gap:20px; }
+  .st-key-page_layout > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child,
+  .st-key-page_layout > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex:1 1 100%; width:100%; }
+  .st-key-page_layout [data-testid="stColumn"]:has(.st-key-function_nav),
+  .st-key-page_layout [data-testid="stColumn"]:has(.st-key-page_content) { flex:1 1 100% !important; width:100% !important; min-width:0 !important; }
+  .st-key-function_nav > [data-testid="stVerticalBlock"] { flex-direction:row; flex-wrap:wrap; gap:4px 8px; }
+  .st-key-function_nav > [data-testid="stVerticalBlock"] > div { width:auto; flex:0 1 auto; max-width:100%; }
+  .st-key-function_nav [data-testid="stDivider"] { display:none; }
+  .st-key-page_content { padding:20px; }
+  .st-key-page_content [data-testid="stHorizontalBlock"] { flex-wrap:wrap; }
+  .st-key-page_content [data-testid="stColumn"] { flex:1 1 100%; width:100%; min-width:0; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .st-key-workspace *, .st-key-workspace *::before, .st-key-workspace *::after { animation:none !important; transition:none !important; }
+}
+</style>"""
+
+
+# DeepSeek 式双区工作台 + 冷蓝学术玻璃主题。作为最终覆盖层，
+# 保留原有业务组件与页面结构，避免视觉改版破坏已有状态和交互。
+DARK_WORKSPACE_CSS = """<style>
+:root {
+  --primary:#4D9FD1;
+  --primary-hover:#65AED8;
+  --primary-soft:#8CC4E3;
+  --primary-deep:#397FA9;
+  --accent:#C28B62;
+  --good:#6FAF8D;
+  --warn:#D2A65A;
+  --danger:#CF7A7A;
+  --bg:#0B1016;
+  --sidebar:#0D141C;
+  --workspace:rgba(18,25,34,.86);
+  --glass:rgba(25,35,46,.66);
+  --glass-strong:rgba(29,41,54,.84);
+  --border:rgba(174,202,224,.13);
+  --border-strong:rgba(174,202,224,.22);
+  --text1:#EDF3F7;
+  --text2:#C5D0D8;
+  --text3:#9DACB9;
+  --title:#F4F8FA;
+  --ease-out-quint:cubic-bezier(.1,.9,.2,1);
+  --noise:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='2' stitchTiles='stitchTiles'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+}
+html, body, .stApp { color-scheme:dark; background:#0B1016 !important; }
+.stApp {
+  background-image:
+    radial-gradient(circle at 82% -12%, rgba(77,159,209,.10), transparent 34%),
+    radial-gradient(circle at 12% 105%, rgba(194,139,98,.055), transparent 30%),
+    var(--noise) !important;
+  color:var(--text1);
+}
+[data-testid="stHeader"] { background:transparent !important; }
+[data-testid="stToolbar"] { display:none !important; }
+[data-testid="stMain"] { background:transparent !important; }
+[data-testid="stMainBlockContainer"] {
+  max-width:none !important;
+  padding:16px 18px 24px !important;
+}
+
+/* 左侧七模块工作栏 */
+[data-testid="stSidebar"] {
+  width:260px !important; min-width:260px !important;
+  background-color:rgba(13,20,28,.96) !important;
+  background-image:linear-gradient(180deg,rgba(77,159,209,.045),transparent 24%),var(--noise) !important;
+  border-right:1px solid rgba(174,202,224,.10) !important;
+  box-shadow:18px 0 42px rgba(0,0,0,.16);
+}
+[data-testid="stSidebar"] > div:first-child { width:260px !important; padding:14px 12px 16px; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap:7px; }
+[data-testid="stSidebar"] hr { border-color:var(--border) !important; }
+.dsh-brand {
+  margin:0 0 14px !important; padding:16px 14px 18px !important;
+  border-radius:18px !important; overflow:hidden;
+  background:linear-gradient(145deg,rgba(77,159,209,.105),rgba(255,255,255,.025) 58%,rgba(194,139,98,.035)) !important;
+  border:1px solid var(--border) !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.045),0 16px 32px rgba(0,0,0,.16) !important;
+}
+.dsh-brand::before { background:var(--noise) !important; opacity:.58 !important; }
+.dsh-brand::after { background:linear-gradient(90deg,var(--primary),rgba(77,159,209,.08)) !important; }
+.dsh-brand-eyebrow { color:#7FB7D7 !important; font-size:10px !important; letter-spacing:.16em !important; }
+.dsh-brand-title { color:var(--title) !important; font-size:20px !important; letter-spacing:-.02em; }
+.dsh-brand-rule { background:linear-gradient(90deg,var(--primary),transparent) !important; opacity:.7; }
+.dsh-brand-sub { color:var(--text3) !important; font-size:12px !important; }
+.dsh-nav-label { margin:1px 10px 4px; color:#718391; font-size:10px; font-weight:800; letter-spacing:.16em; }
+.st-key-module_navigation button,
+.st-key-sidebar_footer button {
+  position:relative; min-height:42px !important; padding:8px 10px !important;
+  justify-content:flex-start !important; gap:9px !important;
+  color:var(--text3) !important; background:transparent !important;
+  border:1px solid transparent !important; border-radius:11px !important;
+  box-shadow:none !important; transition:background-color 180ms var(--ease-out-quint),color 180ms var(--ease-out-quint),border-color 180ms var(--ease-out-quint) !important;
+}
+.st-key-module_navigation button p,.st-key-sidebar_footer button p {
+  color:inherit !important; font-size:13px !important; font-weight:590 !important;
+  white-space:nowrap !important; overflow:hidden; text-overflow:ellipsis;
+}
+.st-key-module_navigation button svg,.st-key-sidebar_footer button svg { color:currentColor !important; width:18px; height:18px; flex:0 0 auto; }
+.st-key-module_navigation button:hover,.st-key-sidebar_footer button:hover {
+  color:var(--text1) !important; background:rgba(255,255,255,.045) !important; border-color:rgba(174,202,224,.08) !important;
+}
+.st-key-module_navigation [data-testid="stBaseButton-primary"],
+.st-key-sidebar_footer [data-testid="stBaseButton-primary"] {
+  color:#EAF5FB !important;
+  background:linear-gradient(90deg,rgba(77,159,209,.17),rgba(77,159,209,.055)) !important;
+  border-color:rgba(77,159,209,.20) !important;
+}
+.st-key-module_navigation [data-testid="stBaseButton-primary"]::before,
+.st-key-sidebar_footer [data-testid="stBaseButton-primary"]::before {
+  content:""; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:999px; background:var(--primary);
+  box-shadow:0 0 14px rgba(77,159,209,.30);
+}
+.st-key-main_nav_04 button::after {
+  content:"主线"; margin-left:auto; padding:2px 6px; border-radius:999px;
+  color:#D8B89E; background:rgba(194,139,98,.10); border:1px solid rgba(194,139,98,.16); font-size:9px; font-weight:800;
+}
+.st-key-sidebar_footer { margin-top:auto !important; padding-top:12px; border-top:1px solid var(--border); }
+.dsh-badge {
+  display:flex !important; margin-top:7px !important; padding:7px 9px !important;
+  color:var(--text3) !important; background:rgba(255,255,255,.025) !important;
+  border:1px solid var(--border) !important; border-radius:10px !important; font-size:10px !important;
+}
+.dsh-foot { color:#687A88 !important; font-size:9px !important; line-height:1.55 !important; overflow-wrap:anywhere; }
+
+/* 右侧大圆角工作区 */
+.st-key-workspace { min-width:0; }
+.st-key-workspace_panel {
+  min-height:calc(100vh - 42px); padding:0 30px 24px !important; overflow:hidden;
+  color:var(--text1); background:var(--workspace) !important;
+  background-image:linear-gradient(145deg,rgba(77,159,209,.032),transparent 36%),var(--noise) !important;
+  border:1px solid var(--border) !important; border-radius:24px !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 24px 70px rgba(0,0,0,.25) !important;
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+}
+.st-key-workspace_header {
+  position:sticky; top:0; z-index:20; margin:0 -30px 22px; padding:26px 30px 14px;
+  background:linear-gradient(180deg,rgba(18,25,34,.98) 0%,rgba(18,25,34,.93) 76%,rgba(18,25,34,.72) 100%);
+  border-bottom:1px solid rgba(174,202,224,.08); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
+}
+.st-key-workspace .dsh-page-title {
+  margin:0 !important; color:var(--title) !important; font-size:clamp(25px,2.1vw,34px) !important;
+  line-height:1.18 !important; font-weight:720 !important; letter-spacing:-.035em;
+}
+.st-key-workspace .dsh-page-description {
+  max-width:760px; margin:7px 0 17px !important; color:var(--text3) !important;
+  font-size:14px !important; line-height:1.65 !important;
+}
+.st-key-function_nav { overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
+.st-key-function_nav::-webkit-scrollbar { display:none; }
+.st-key-function_nav > [data-testid="stHorizontalBlock"] { display:flex !important; width:max-content !important; gap:7px !important; flex-wrap:nowrap !important; }
+.st-key-function_nav [data-testid="stColumn"] { flex:0 0 auto !important; width:auto !important; min-width:0 !important; }
+.st-key-function_nav button {
+  min-height:34px !important; width:auto !important; padding:6px 13px !important; white-space:nowrap;
+  color:var(--text3) !important; background:rgba(255,255,255,.018) !important;
+  border:1px solid transparent !important; border-radius:999px !important; box-shadow:none !important;
+  transition:background-color 180ms var(--ease-out-quint),color 180ms var(--ease-out-quint),border-color 180ms var(--ease-out-quint) !important;
+}
+.st-key-function_nav button p { color:inherit !important; font-size:12px !important; font-weight:650 !important; white-space:nowrap !important; }
+.st-key-function_nav button:hover { color:var(--text1) !important; background:rgba(255,255,255,.05) !important; }
+.st-key-function_nav [data-testid="stBaseButton-primary"] {
+  color:#E9F5FB !important; background:rgba(77,159,209,.15) !important; border-color:rgba(77,159,209,.22) !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.035) !important;
+}
+.st-key-page_content { padding:0 0 8px !important; background:transparent !important; color:var(--text1) !important; border:0 !important; border-radius:0 !important; }
+.st-key-page_content [class*="st-key-view_body_"] { animation:workspaceReveal 200ms var(--ease-out-quint); }
+@keyframes workspaceReveal { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+/* 通用玻璃容器、信息与数据层级 */
+.st-key-page_content [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-page_content .dsh-info,.st-key-page_content .dsh-stat,.st-key-page_content .dsh-bubble,
+.st-key-page_content .dsh-agent-card,.st-key-page_content .dsh-gauge {
+  color:var(--text1) !important; background:var(--glass) !important;
+  background-image:linear-gradient(145deg,rgba(255,255,255,.025),transparent 48%) !important;
+  border:1px solid var(--border) !important; border-radius:17px !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 12px 30px rgba(0,0,0,.12) !important;
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+}
+.st-key-page_content [data-testid="stVerticalBlockBorderWrapper"] { padding:2px !important; }
+.st-key-page_content .dsh-info,.st-key-page_content .dsh-stat,.st-key-page_content .dsh-bubble { padding:16px 18px !important; }
+.st-key-page_content .dsh-info[style*="background-color"],.st-key-page_content .dsh-info-light {
+  background:rgba(25,35,46,.74) !important; border-color:var(--border) !important; color:var(--text1) !important;
+}
+.st-key-page_content .dsh-info[style*="background-color"] *, .st-key-page_content .dsh-info-light * { color:var(--text2) !important; }
+.st-key-page_content [style*="background:#FDFBF6"],.st-key-page_content [style*="background: #FDFBF6"] {
+  color:var(--text2) !important; background:rgba(25,35,46,.74) !important; border-color:var(--border) !important;
+}
+.st-key-page_content .dsh-research-hints span {
+  color:var(--text2) !important; background:rgba(25,35,46,.68) !important;
+  border:1px solid var(--border) !important; border-radius:999px !important;
+}
+.st-key-page_content .dsh-info-title { color:var(--title) !important; font-size:14px !important; border:0 !important; }
+.st-key-page_content .dsh-info-title span[style*="border-left"] { border-left:2px solid var(--primary) !important; padding-left:9px !important; }
+.st-key-page_content .dsh-info-line,.st-key-page_content .dsh-bubble-body { color:var(--text2) !important; font-size:14px !important; line-height:1.72 !important; }
+.st-key-page_content .dsh-stat-value { color:var(--title) !important; font-size:clamp(24px,2.2vw,34px) !important; letter-spacing:-.035em; }
+.st-key-page_content .dsh-stat-label,.st-key-page_content .dsh-stat-meta { color:var(--text3) !important; }
+.st-key-page_content .dsh-stat-icon { color:var(--primary) !important; background:rgba(77,159,209,.10) !important; }
+.st-key-page_content .dsh-stat-delta { color:#86BEA1 !important; }
+.st-key-page_content .dsh-section {
+  margin:26px 0 13px !important; padding:0 !important; color:var(--title) !important;
+  font-size:17px !important; font-weight:700 !important; letter-spacing:-.015em; background:transparent !important; border:0 !important;
+}
+.st-key-page_content .dsh-section::before { content:"" !important; display:inline-block !important; width:18px; height:2px; margin-right:9px; vertical-align:middle; border-radius:999px; background:linear-gradient(90deg,var(--primary),rgba(77,159,209,.16)); }
+.st-key-page_content .dsh-section-note { margin-left:auto; color:var(--text3) !important; font-size:11px !important; font-weight:500 !important; }
+.st-key-page_content .dsh-tag,.st-key-page_content [class*="dsh-tag"] {
+  color:#B9D9EA !important; background:rgba(77,159,209,.09) !important;
+  border:1px solid rgba(77,159,209,.16) !important; border-radius:999px !important;
+}
+.st-key-page_content .dsh-flow-status {
+  color:var(--text2) !important; background:rgba(77,159,209,.075) !important;
+  border:1px solid rgba(77,159,209,.14) !important; border-radius:12px !important;
+}
+.st-key-page_content .dsh-fbar-head { color:var(--text2) !important; }
+.st-key-page_content .dsh-fbar-track { background:rgba(255,255,255,.07) !important; }
+.st-key-page_content .dsh-fbar-fill { background:linear-gradient(90deg,var(--primary-deep),var(--primary)) !important; }
+.st-key-page_content .dsh-bubble-role { color:#AFD5E9 !important; background:rgba(77,159,209,.10) !important; }
+.st-key-page_content .dsh-chat-role { color:#A9CEE2 !important; }
+.st-key-page_content .dsh-chat-bubble { color:var(--text2) !important; background:var(--glass) !important; border:1px solid var(--border) !important; border-radius:16px !important; }
+.st-key-page_content .dsh-chat-row.is-teacher .dsh-chat-bubble { background:rgba(77,159,209,.105) !important; }
+.st-key-page_content .dsh-chat-row.is-teacher .dsh-chat-avatar { color:#EAF5FB !important; background:#397FA9 !important; }
+.st-key-page_content .dsh-step { border-radius:13px !important; background:rgba(255,255,255,.025) !important; border-color:var(--border) !important; }
+.st-key-page_content .dsh-step-current { color:#DCEEF7 !important; background:rgba(77,159,209,.10) !important; border-color:rgba(77,159,209,.22) !important; }
+.st-key-page_content .dsh-step-current .dsh-step-num { background:var(--primary-deep) !important; }
+.st-key-page_content .dsh-step-done { color:#A9D2BB !important; background:rgba(111,175,141,.08) !important; border-color:rgba(111,175,141,.18) !important; }
+
+/* Streamlit 原生控件 */
+.st-key-page_content p,.st-key-page_content li,.st-key-page_content label,.st-key-page_content [data-testid="stWidgetLabel"] p { color:var(--text2) !important; }
+.st-key-page_content h1,.st-key-page_content h2,.st-key-page_content h3,.st-key-page_content h4 { color:var(--title) !important; }
+.st-key-page_content input,.st-key-page_content textarea,
+.st-key-page_content [data-baseweb="select"] > div,.st-key-page_content [data-baseweb="base-input"] {
+  color:var(--text1) !important; background:rgba(8,13,19,.46) !important; border-color:var(--border-strong) !important; border-radius:12px !important;
+}
+.st-key-page_content input::placeholder,.st-key-page_content textarea::placeholder { color:#70818E !important; }
+.st-key-page_content [data-baseweb="select"] * { color:var(--text2) !important; }
+.st-key-page_content [data-testid="stFileUploaderDropzone"] {
+  background:rgba(8,13,19,.34) !important; border:1px dashed rgba(174,202,224,.20) !important; border-radius:16px !important;
+}
+.st-key-page_content button { min-height:40px; border-radius:11px !important; transition:background-color 180ms var(--ease-out-quint),border-color 180ms var(--ease-out-quint),color 180ms var(--ease-out-quint),transform 180ms var(--ease-out-quint) !important; }
+.st-key-page_content [data-testid="stBaseButton-primary"] {
+  color:#F4FAFD !important; background:linear-gradient(135deg,#397FA9,#4D9FD1) !important;
+  border:1px solid rgba(140,196,227,.20) !important; box-shadow:0 8px 22px rgba(38,104,143,.18) !important;
+}
+.st-key-page_content [data-testid="stBaseButton-primary"]:hover { background:linear-gradient(135deg,#438CB6,#65AED8) !important; transform:translateY(-1px); }
+.st-key-page_content [data-testid="stBaseButton-secondary"] {
+  color:var(--text2) !important; background:rgba(255,255,255,.025) !important; border:1px solid var(--border-strong) !important;
+}
+.st-key-page_content [data-testid="stBaseButton-secondary"]:hover { color:var(--text1) !important; background:rgba(255,255,255,.055) !important; border-color:rgba(174,202,224,.28) !important; }
+.st-key-page_content button p { color:inherit !important; }
+.st-key-page_content [role="tablist"] { gap:7px; border-bottom:1px solid var(--border); }
+.st-key-page_content [role="tab"] { color:var(--text3) !important; border-radius:10px 10px 0 0; }
+.st-key-page_content [role="tab"][aria-selected="true"] { color:#C5E2F0 !important; background:rgba(77,159,209,.08) !important; }
+.st-key-page_content [data-testid="stExpander"] { background:rgba(25,35,46,.48) !important; border:1px solid var(--border) !important; border-radius:14px !important; }
+.st-key-page_content [data-testid="stAlert"] { border-radius:14px !important; border:1px solid var(--border) !important; background:rgba(25,35,46,.74) !important; }
+.st-key-page_content table { color:var(--text2) !important; background:rgba(10,16,23,.28); border-radius:12px; }
+.st-key-page_content th { color:var(--title) !important; background:rgba(77,159,209,.07) !important; }
+.st-key-page_content td,.st-key-page_content th { border-color:var(--border) !important; }
+.st-key-page_content a { color:#7FC0E2 !important; }
+.st-key-page_content .dsh-empty { max-width:680px; padding:24px !important; background:rgba(25,35,46,.48); border:1px dashed var(--border-strong); border-radius:18px; }
+.st-key-page_content .dsh-empty-title { color:var(--title) !important; }
+.st-key-page_content .dsh-empty-note,.st-key-page_content .dsh-save-status { color:var(--text3) !important; }
+.st-key-page_content .dsh-save-status { border-color:var(--border) !important; }
+.st-key-research_reading,.st-key-diag_report_reading,.st-key-ws_editor_panel { max-width:980px; }
+
+@media (max-width:900px) {
+  [data-testid="stSidebar"] { width:236px !important; min-width:236px !important; }
+  [data-testid="stSidebar"] > div:first-child { width:236px !important; }
+  [data-testid="stMainBlockContainer"] { padding:10px !important; }
+  .st-key-workspace_panel { padding:0 20px 20px !important; border-radius:20px !important; }
+  .st-key-workspace_header { margin:0 -20px 18px; padding:22px 20px 12px; }
+  .st-key-page_content [data-testid="stHorizontalBlock"] { flex-wrap:wrap !important; }
+  .st-key-page_content [data-testid="stColumn"] { flex:1 1 min(100%,320px) !important; width:auto !important; min-width:0 !important; }
+}
+@media (max-width:640px) {
+  [data-testid="stMainBlockContainer"] { padding:6px !important; }
+  .st-key-workspace_panel { min-height:calc(100vh - 12px); padding:0 15px 16px !important; border-radius:17px !important; }
+  .st-key-workspace_header { margin:0 -15px 16px; padding:18px 15px 10px; }
+  .st-key-workspace .dsh-page-title { font-size:24px !important; }
+  .st-key-workspace .dsh-page-description { font-size:12px !important; margin-bottom:13px !important; }
+  .st-key-page_content [data-testid="stColumn"] { flex:1 1 100% !important; width:100% !important; }
+  .st-key-page_content .dsh-info,.st-key-page_content .dsh-stat,.st-key-page_content .dsh-bubble { padding:14px !important; border-radius:15px !important; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .st-key-workspace *,[data-testid="stSidebar"] * { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}
+</style>"""
 
 
 def safe_text(value) -> str:
@@ -708,6 +1061,8 @@ def draft_widget(kind, label, *, key, **kwargs):
 
     def commit():
         st.session_state[key] = st.session_state[widget_key]
+        if key in ("sim_transcript", "sim_teacher_input"):
+            st.session_state["sim_transcribe_truncate"] = False
         if key == "ws_lesson_editor":
             st.session_state["ws_lesson"] = st.session_state[widget_key]
 
@@ -723,6 +1078,7 @@ def init_session_state():
     """集中初始化全部会话状态，统一守卫，避免跨页状态丢失。"""
     defaults = {
         "nav_radio": "01",                       # 当前导航页 id
+        "shell_mode": "workspace",               # workspace=七模块；manage=全局内容管理
         # ---- 课程设计工作台（演示主线）----
         "ws_stage": 0,                           # 0=未开始 1=AI初生成 2=人工迭代 3=素养校验
         "ws_lesson": None,                       # 教案 Markdown 文本
@@ -982,6 +1338,9 @@ def _save_persistent_state():
     fingerprint = hash(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
     if fingerprint == st.session_state.get("persistence_fingerprint"):
         return True
+    if fingerprint == st.session_state.get("persistence_attempted"):
+        return False
+    st.session_state["persistence_attempted"] = fingerprint
     st.session_state["persistence_status"] = "待保存：正在同步已提交的内容。"
     try:
         response = requests.put(
@@ -1023,7 +1382,7 @@ def _init_persistent_state():
             json.dumps(_persistent_payload(), ensure_ascii=False, sort_keys=True, default=str)
         )
         return
-    _save_persistent_state()
+
 
 
 def _confirmed_write(response):
@@ -1042,9 +1401,10 @@ def _reset_business():
     for key in PERSISTED_STATE_KEYS:
         st.session_state.pop(key, None)
     for key in list(st.session_state):
-        if key.startswith(("_ui_", "diag_upload", "sim_audio", "sim_transcribe", "research_pending", "diag_chat_", "backup_")):
+        if key.startswith(("_ui_", "diag_upload", "sim_audio", "sim_transcribe", "research_pending", "diag_chat_", "backup_", "request_error_", "fallback_", "preview_")):
             st.session_state.pop(key, None)
     st.session_state["persistence_fingerprint"] = None
+    st.session_state.pop("persistence_attempted", None)
     st.session_state.pop("persistence_remote_pending", None)
     st.session_state.pop("persistence_confirm_clear", None)
 
@@ -1072,6 +1432,7 @@ def _clear_saved_content(local_only=False):
 
 
 def _retry_persistence():
+    st.session_state.pop("persistence_attempted", None)
     if config.MOCK_MODE:
         st.session_state["persistence_status"] = "Mock 模式仅保留当前会话，请下载备份。"
         return
@@ -1097,15 +1458,16 @@ def _resolve_remote(restore):
         _restore_persistent_state(remote)
     st.session_state["persistence_available"] = True
     st.session_state["persistence_fingerprint"] = None
+    st.session_state.pop("persistence_attempted", None)
     _save_persistent_state()
 
 
 def _import_backup():
     try:
-        uploaded = st.session_state.get("backup_upload")
+        uploaded = st.session_state.get("backup_file")
         if uploaded is None:
             return
-        state = parse_backup(uploaded.getvalue())
+        state = parse_backup(uploaded["data"])
         _reset_business()
         _restore_persistent_state(state)
         st.session_state["persistence_status"] = "备份已导入当前档案；待同步远端。" if st.session_state.get("persistence_available") else "备份已恢复；仅当前会话保留，长期保存尚未连接。"
@@ -1116,14 +1478,15 @@ def _import_backup():
 def persistence_controls():
     """全局档案状态和手动清除入口；保持侧边栏结构不变。"""
     workspace_id = _workspace_id()
-    _save_persistent_state()
-    st.caption(st.session_state.get("persistence_status", "仅当前会话"))
-    with st.expander("内容保存与清除", expanded=False, key="persistence_panel"):
+    with st.container(key="persistence_panel"):
+        section_title("内容管理", "管理所有页面的同一份档案")
         status = safe_text(st.session_state.get("persistence_status", "当前会话自动保留。"))
         st.markdown(
             f'<div class="dsh-flow-status">{icon("bookmark", 14)} {status}</div>',
             unsafe_allow_html=True,
         )
+        if st.session_state.get("persistence_error"):
+            st.caption("长期保存连接详情：" + st.session_state["persistence_error"])
         st.caption("只有确认远端保存成功后，才能用同一完整网址恢复。尚未提交的输入不保证已保存，请失焦或按 Ctrl+Enter 提交。")
         st.caption("完整 workspace 链接可能允许访问档案，请勿公开分享含真实课堂资料的链接。原始音频与文档不进入档案。")
         st.code(workspace_id, language=None)
@@ -1133,11 +1496,13 @@ def persistence_controls():
             st.button("恢复远端内容（覆盖本次）", on_click=_resolve_remote, args=(True,))
             st.button("保留本次内容（覆盖远端）", on_click=_resolve_remote, args=(False,))
         st.download_button("下载完整 JSON 备份", backup_bytes(), file_name="stem-workspace.json", mime="application/json", key="backup_download")
-        st.file_uploader("导入 JSON 备份（最多 10 MB）", type=["json"], max_upload_size=10, key="backup_upload")
-        import_confirmed = st.checkbox("我确认用备份替换当前输入、结果和对话", key="backup_confirm")
-        st.button("确认导入备份", disabled=not (import_confirmed and st.session_state.get("backup_upload")), on_click=_import_backup)
+        st.file_uploader("导入 JSON 备份（最多 10 MB）", type=["json"], max_upload_size=10, key="backup_upload", on_change=_backup_changed)
+        if st.session_state.get("backup_file"):
+            st.caption("待导入：" + st.session_state["backup_file"]["name"])
+        import_confirmed = draft_widget("checkbox", "我确认用备份替换当前输入、结果和对话", key="backup_confirm")
+        st.button("确认导入备份", disabled=not (import_confirmed and st.session_state.get("backup_file")), on_click=_import_backup)
         st.divider()
-        confirmed = st.checkbox("我确认清除内容，已自行下载需要的备份", key="persistence_confirm_clear")
+        confirmed = draft_widget("checkbox", "我确认清除内容，已自行下载需要的备份", key="persistence_confirm_clear")
         st.button(
             "清除全部已保存内容",
             type="secondary",
@@ -1152,21 +1517,144 @@ def persistence_controls():
 # =====================================================================
 # 3. 统一样式组件
 # =====================================================================
-def page_header(icon_name: str, title: str, subtitle: str, tag: str | None = None):
-    """渐变页头横幅（Iconify 图标 + 标题 + 功能标签）。"""
-    tag_html = f'<span class="dsh-hero-tag">{tag}</span>' if tag else ""
-    try:
-        module_id = str(st.session_state["nav_radio"])
-    except (KeyError, AttributeError):
-        module_id = "01"
+def page_header(icon_name, title, subtitle, tag=None):
+    st.markdown(f'<h1 class="dsh-page-title">{safe_text(title)}</h1>'
+                f'<p class="dsh-page-description">{safe_text(subtitle)}</p>', unsafe_allow_html=True)
+
+
+def current_view(pid):
+    key = "view_" + pid
+    choices = [item[0] for item in config.PAGE_VIEWS[pid]]
+    if st.session_state.get(key) not in choices:
+        st.session_state[key] = choices[0]
+    return st.session_state[key]
+
+
+def set_view(pid, view):
+    if view not in dict(config.PAGE_VIEWS[pid]):
+        raise ValueError("未知功能目录")
+    if current_view(pid) != view:
+        st.session_state.pop("preview_" + pid, None)
+    st.session_state["view_" + pid] = view
+
+
+def page_frame(pid):
+    item = next(item for item in config.NAV_ITEMS if item["id"] == pid)
+    view = current_view(pid)
+    with st.container(key="workspace_panel"):
+        with st.container(key="workspace_header"):
+            page_header(item["icon"], item["name"], config.PAGE_DESCRIPTIONS[pid])
+            with st.container(key="function_nav"):
+                nav_columns = st.columns(len(config.PAGE_VIEWS[pid]), gap="small")
+                for column, (ident, label) in zip(nav_columns, config.PAGE_VIEWS[pid]):
+                    with column:
+                        st.button(
+                            label,
+                            key=f"view_button_{pid}_{ident}",
+                            width="stretch",
+                            type="primary" if view == ident else "secondary",
+                            on_click=set_view,
+                            args=(pid, ident),
+                        )
+        content = st.container(key="page_content")
+    return view, content
+
+
+def management_frame():
+    """在与业务页一致的右侧工作区中渲染全局内容管理。"""
+    with st.container(key="workspace_panel"):
+        with st.container(key="workspace_header"):
+            page_header("bookmark", "内容管理", "管理当前工作区的长期保存、备份与恢复。")
+        content = st.container(key="page_content")
+    return content
+
+
+def empty_view(pid, text, target=None):
     st.markdown(
-        f"""<div class="dsh-hero">
-        <div class="dsh-hero-icon">{icon(icon_name, 26)}</div>
-        <div class="dsh-hero-copy"><div class="dsh-hero-kicker">模块 {module_id} / 07 · 教—学—研一体化</div>
-        <div class="dsh-hero-title">{title}</div><div class="dsh-hero-sub">{subtitle}</div></div>
-        {tag_html}</div>""",
+        f'<div class="dsh-empty"><div class="dsh-empty-title">{safe_text(text)}</div>'
+        '<div class="dsh-empty-note">完成输入后，结果会保留在当前会话中。</div></div>',
         unsafe_allow_html=True,
     )
+    st.button("前往输入", type="primary", key=f"empty_{pid}_{current_view(pid)}",
+              on_click=set_view, args=(pid, target or config.PAGE_VIEWS[pid][0][0]))
+
+
+def accept_result(pid, result, origin, target):
+    """在调用点记录本次请求结果，避免全局后端状态被其他页面请求覆盖。"""
+    if config.MOCK_MODE or is_agent_response(result):
+        for prefix in ("request_error_", "fallback_", "preview_"):
+            st.session_state.pop(prefix + pid, None)
+        return True
+    status = st.session_state.get("backend_status") or ("down", "无有效回答")
+    st.session_state["request_error_" + pid] = f"请求失败：{status[1]}。输入及已有结果已保留，可重试。"
+    st.session_state["fallback_" + pid] = {
+        "result": copy.deepcopy(result), "origin": origin, "target": target,
+    }
+    return False
+
+
+def _open_mock_preview(pid):
+    fallback = st.session_state["fallback_" + pid]
+    set_view(pid, fallback["target"])
+    st.session_state["preview_" + pid] = True
+
+
+def _close_mock_preview(pid):
+    fallback = st.session_state["fallback_" + pid]
+    st.session_state.pop("preview_" + pid, None)
+    set_view(pid, fallback["origin"])
+
+
+def request_notice(pid):
+    error = st.session_state.get("request_error_" + pid)
+    if error:
+        st.error(error)
+        if st.session_state.get("fallback_" + pid) and not st.session_state.get("preview_" + pid):
+            st.button("查看 Mock 示例（只读）", key="mock_preview_" + pid,
+                      on_click=_open_mock_preview, args=(pid,))
+
+
+def render_mock_preview(pid):
+    """只读渲染兜底；不调用业务渲染器，也不写入报告、教案或流程阶段。"""
+    if not st.session_state.get("preview_" + pid):
+        return False
+    st.warning("Mock 示例 · 非真实请求结果 · 仅供查看，未写入当前工作流程。")
+    result = st.session_state["fallback_" + pid]["result"] or {}
+    if isinstance(result, dict):
+        for key in ("lesson_md", "topic_md", "lit_md", "survey_md", "exp_md", "conclusion", "status"):
+            if result.get(key):
+                st.markdown(str(result[key]))
+        for problem in result.get("problems", []):
+            st.subheader(problem.get("title", "示例问题"))
+            for label, key in (("证据", "evidence"), ("归因", "cause"), ("建议", "suggest")):
+                st.write(f"{label}：{problem.get(key, '')}")
+        for feedback in result.get("feedback", []):
+            st.write(f"{feedback.get('name', '示例学生')}：{feedback.get('text', '')}")
+        if result.get("flow"):
+            flow_dashboard(result["flow"], "Mock 示例指标，非实际测量")
+    st.button("返回继续操作", key="mock_return_" + pid, on_click=_close_mock_preview, args=(pid,))
+    return True
+
+
+def save_status():
+    _save_persistent_state()
+    message = st.session_state.get("persistence_status", "当前会话自动保留。")
+    if message.startswith("长期保存接口待后端同步"):
+        message = "当前内容保留在本次会话；长期保存待后端接通。"
+    st.markdown(f'<div class="dsh-save-status">{safe_text(message)}</div>', unsafe_allow_html=True)
+
+
+def finish_action(pid, target):
+    set_view(pid, target)
+    _save_persistent_state()
+    st.rerun()
+
+
+def _backup_changed():
+    uploaded = st.session_state.get("backup_upload")
+    st.session_state["backup_confirm"] = False
+    st.session_state["backup_file"] = ({"name": uploaded.name, "data": uploaded.getvalue()}
+                                        if uploaded is not None else None)
 
 
 def section_title(text: str, note: str = ""):
@@ -1379,8 +1867,8 @@ def render_kg(nodes, edges, height=540, key="kg", hierarchical=False, direction=
                 label=rel,
                 arrows="to",
                 dashes=dashed,
-                color={"color": "#8A8A8A", "highlight": "#C9B18F", "hover": "#A67C52"},
-                font={"size": 10, "color": "#b8bcc6", "face": "Microsoft YaHei", "strokeWidth": 2},
+                color={"color": "#607786", "highlight": "#65AED8", "hover": "#4D9FD1"},
+                font={"size": 10, "color": "#9DACB9", "face": "Microsoft YaHei", "strokeWidth": 2},
             )
         )
 
@@ -1394,10 +1882,10 @@ def render_kg(nodes, edges, height=540, key="kg", hierarchical=False, direction=
         levelSeparation=175,
         nodeSpacing=95,
         nodeHighlightBehavior=True,
-        highlightColor={"border": "#C9B18F", "background": "rgba(140,110,74,0.25)"},
-        hoverColor={"border": "#A67C52", "background": "rgba(166,124,82,0.25)"},
-        nodes={"font": {"color": "#FFFFFF", "size": 13, "face": "Microsoft YaHei"}, "borderWidth": 1, "shadow": False},
-        edges={"color": {"color": "#8A8A8A", "highlight": "#C9B18F"}, "smooth": {"enabled": True, "type": "dynamic"}, "selectionWidth": 2},
+        highlightColor={"border": "#65AED8", "background": "rgba(77,159,209,0.22)"},
+        hoverColor={"border": "#4D9FD1", "background": "rgba(77,159,209,0.16)"},
+        nodes={"font": {"color": "#EDF3F7", "size": 13, "face": "Microsoft YaHei"}, "borderWidth": 1, "shadow": False},
+        edges={"color": {"color": "#607786", "highlight": "#65AED8"}, "smooth": {"enabled": True, "type": "dynamic"}, "selectionWidth": 2},
     )
     agraph(nodes=ag_nodes, edges=ag_edges, config=ag_config)
 
@@ -1425,7 +1913,7 @@ def node_detail_panel(nodes, edges, key="kg_node_detail"):
     if not nodes:
         return
     options = [f'{n["label"]} · {n.get("type", "")}' for n in nodes]
-    choice = st.selectbox("选择节点查看详情（等价于画布点击）", options, index=0, key=key)
+    choice = draft_widget("selectbox", "选择节点查看详情（等价于画布点击）", options=options, index=0, key=key)
     idx = options.index(choice)
     node = nodes[idx]
 

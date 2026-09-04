@@ -463,6 +463,8 @@ def _advance_flow(theme, utterance):
     _agent_payload("sim_flow", question),
     mock_result=mock_res,
   )
+  if not comp.accept_result("02", res, "interaction", "interaction"):
+    return
   st.session_state["sim_round"] = r
   if not isinstance(res, dict):
     res = mock_res
@@ -592,139 +594,104 @@ def _goto(pid):
 # =====================================================================
 # 页面 01 · 首页·项目总览
 # =====================================================================
-def page_overview():
-  comp.page_header("house", "首页·项目总览", "项目定位 · 整体架构 · 四大核心能力", "项目介绍")
-
-  col_a, col_b = st.columns([2.4, 1])
-  with col_a:
-    comp.info_card(
-      "项目定位",
-      [comp.safe_text(config.PROJECT_POSITION)],
-      icon_name="target", tone=config.COLORS["primary"],
-    )
-  with col_b:
-    comp.mock_badge()
-    st.markdown('<div style="height:2px;"></div>', unsafe_allow_html=True)
-    st.caption(f"版本 {config.VERSION} ｜ 统一接口 {config.API_BASE}/api/agent-chat")
-
-  comp.section_title("系统整体架构", "应用层 → 能力层 → 知识图谱底座 → 教-学-研闭环")
-  st.mermaid_chart("""%%{init: {"theme": "base", "themeVariables": {
-  "fontFamily": "Segoe UI, Microsoft YaHei, sans-serif",
-  "primaryColor": "#FDFBF6",
-  "primaryTextColor": "#3A3129",
-  "primaryBorderColor": "#A67C52",
-  "lineColor": "#6F6559",
-  "clusterBkg": "#F1EADF",
-  "clusterBorder": "#C9B18F",
-  "edgeLabelBackground": "#FDFBF6"
-}}}%%
-graph TD
- subgraph APP["应用层 · 四大业务智能体"]
-  A1["高保真跨学科教学模拟智能体"]
-  A2["因材施教智能教学诊断与反思智能体"]
-  A3["人机协同跨学科课程设计智能工作台"]
-  A4["课堂数据驱动教育研究孵化智能伙伴"]
- end
- subgraph CAP["能力层 · 核心引擎"]
-  C1["全维度多模态感知框架"]
-  C2["图增强双路 GraphRAG"]
-  C3["学生认知反向归因引擎"]
-  C4["心流自适应引擎"]
-  C5["Human-in-the-Loop 协同机制"]
- end
- subgraph KG["技术底座 · 多源异构动态语义知识图谱"]
-  K1["教育理论本体"]
-  K2["跨学科概念映射"]
-  K3["跨学科教学案例"]
-  K4["课堂行为模式"]
-  K5["教育科研方法"]
-  K6["师范生成长评估"]
- end
- APP --> CAP --> KG
- A1 -->|实训多模态数据| A2
- A2 -->|诊断反哺设计| A3
- A3 -->|教学问题转化| A4
- A4 -->|研究成果沉淀| KG
- KG -->|图谱驱动仿真| A1
- classDef appNode fill:#FDFBF6,stroke:#8C6E4A,color:#3A3129,stroke-width:1.8px
- classDef capNode fill:#E8DFCF,stroke:#A67C52,color:#3A3129,stroke-width:1.8px
- classDef kgNode fill:#F6EDDF,stroke:#C9B18F,color:#3A3129,stroke-width:1.8px
- class A1,A2,A3,A4 appNode
- class C1,C2,C3,C4,C5 capNode
- class K1,K2,K3,K4,K5,K6 kgNode
- style APP fill:#F4F0E8,stroke:#C9B18F,color:#3A3129,stroke-width:1px
- style CAP fill:#EEE5D8,stroke:#C9B18F,color:#3A3129,stroke-width:1px
- style KG fill:#F4F0E8,stroke:#C9B18F,color:#3A3129,stroke-width:1px
- linkStyle default stroke:#6F6559,stroke-width:1.4px,color:#3A3129
-""")
-
-  comp.section_title("四大核心能力", "点击卡片下方按钮可直接跳转体验")
-  cols = st.columns(4)
-  agent_tones = ["#A67C52", "#6F8A68", "#B56E55", "#B59A55"]
-  for i, ag in enumerate(config.AGENTS):
-    with cols[i]:
-      agent_name = comp.safe_text(ag["name"])
-      lines = [comp.safe_text(b) for b in ag["breakthroughs"]]
-      advantage = comp.safe_text(ag["advantage"])
-      tone = agent_tones[i]
-      st.markdown(
-        f"""<div class="dsh-agent-card" style="--agent-accent:{tone};">
-        <div class="dsh-agent-top">
-          <div class="dsh-agent-icon">{comp.icon(ag["icon"], 19, tone)}</div>
-          <span class="dsh-agent-index">CORE 0{i + 1}</span>
-        </div>
-        <div class="dsh-agent-title">{agent_name}</div>
-        <div class="dsh-agent-kicker">核心突破</div>
-        <div class="dsh-agent-list">
-          {''.join(f'<div class="dsh-agent-feature">{line}</div>' for line in lines)}
-        </div>
-        <div class="dsh-agent-value">
-          <div class="dsh-agent-value-label">差异化价值</div>
-          <div class="dsh-agent-value-text">{advantage}</div>
-        </div></div>""",
-        unsafe_allow_html=True,
+def page_overview(view):
+  if view == "intro":
+    lead, pulse = st.columns([1.65, 1], gap="large")
+    with lead:
+      comp.section_title("项目定位")
+      st.write(config.PROJECT_POSITION)
+      st.caption("围绕教学模拟、诊断反思、课程设计与科研孵化开展教师实践。")
+      st.button("进入课程设计工作台", type="primary", on_click=_goto, args=("04",), key="overview_start")
+    with pulse:
+      comp.info_card(
+        "当前演示闭环",
+        ["课程设计 → 教学模拟", "课例诊断 → 反思改进", "教学问题 → 教育研究"],
+        icon_name="route", tone=config.COLORS["primary"],
       )
-      st.button(
-        "进入页面", key=f"jump_{ag['page_id']}",
-        on_click=_goto, args=(ag["page_id"],),
-        width="stretch",
-      )
+      comp.mock_badge()
+  elif view == "architecture":
+      comp.section_title("系统整体架构", "应用层 → 能力层 → 知识图谱底座 → 教-学-研闭环")
+      st.mermaid_chart("""%%{init: {"theme": "base", "themeVariables": {
+      "fontFamily": "Segoe UI, Microsoft YaHei, sans-serif",
+      "background": "#121922",
+      "primaryColor": "#19232E",
+      "primaryTextColor": "#EDF3F7",
+      "primaryBorderColor": "#4D9FD1",
+      "lineColor": "#7792A4",
+      "clusterBkg": "#111A23",
+      "clusterBorder": "#304757",
+      "edgeLabelBackground": "#121922"
+    }}}%%
+    graph TD
+     subgraph APP["应用层 · 四大业务智能体"]
+      A1["高保真跨学科教学模拟智能体"]
+      A2["因材施教智能教学诊断与反思智能体"]
+      A3["人机协同跨学科课程设计智能工作台"]
+      A4["课堂数据驱动教育研究孵化智能伙伴"]
+     end
+     subgraph CAP["能力层 · 核心引擎"]
+      C1["全维度多模态感知框架"]
+      C2["图增强双路 GraphRAG"]
+      C3["学生认知反向归因引擎"]
+      C4["心流自适应引擎"]
+      C5["Human-in-the-Loop 协同机制"]
+     end
+     subgraph KG["技术底座 · 多源异构动态语义知识图谱"]
+      K1["教育理论本体"]
+      K2["跨学科概念映射"]
+      K3["跨学科教学案例"]
+      K4["课堂行为模式"]
+      K5["教育科研方法"]
+      K6["师范生成长评估"]
+     end
+     APP --> CAP --> KG
+     A1 -->|实训多模态数据| A2
+     A2 -->|诊断反哺设计| A3
+     A3 -->|教学问题转化| A4
+     A4 -->|研究成果沉淀| KG
+     KG -->|图谱驱动仿真| A1
+     classDef appNode fill:#192631,stroke:#4D9FD1,color:#EDF3F7,stroke-width:1.4px
+     classDef capNode fill:#202A33,stroke:#C28B62,color:#EDF3F7,stroke-width:1.4px
+     classDef kgNode fill:#17232C,stroke:#6FAF8D,color:#EDF3F7,stroke-width:1.4px
+     class A1,A2,A3,A4 appNode
+     class C1,C2,C3,C4,C5 capNode
+     class K1,K2,K3,K4,K5,K6 kgNode
+     style APP fill:#101820,stroke:#304757,color:#EDF3F7,stroke-width:1px
+     style CAP fill:#101820,stroke:#304757,color:#EDF3F7,stroke-width:1px
+     style KG fill:#101820,stroke:#304757,color:#EDF3F7,stroke-width:1px
+     linkStyle default stroke:#7792A4,stroke-width:1.2px,color:#C5D0D8
+    """)
+  elif view == "capabilities":
+    capability_columns = st.columns([1.15, .85], gap="large")
+    for i, ag in enumerate(config.AGENTS):
+      with capability_columns[0 if i in (0, 3) else 1]:
+        with st.container(border=True):
+          st.subheader(ag["name"])
+          st.write(ag["advantage"])
+          with st.expander("详细说明", key="capability_" + ag["page_id"]):
+            for line in ag["breakthroughs"]:
+              st.write(line)
+          st.button("进入页面", key="jump_" + ag["page_id"], on_click=_goto, args=(ag["page_id"],))
 
-  c1, c2 = st.columns([1.6, 2.4])
-  with c1:
-    st.button(
-      "一键进入演示主线：课程设计工作台",
-      type="primary", width="stretch",
-      on_click=_goto, args=("04",),
-    )
-  with c2:
-    st.caption("演示主线：从碳中和课程设计工作台进入知识图谱引擎，再轮巡其余模块，全程约 3 分钟。")
 
-
-# =====================================================================
-# 页面 02 · 跨学科教学模拟实训
-# =====================================================================
 def _start_simulation():
   """开始一次新模拟；此操作只重置本地状态，不请求接口。"""
   _reset_flow()
   st.session_state["sim_started"] = True
+  comp.set_view("02", "interaction")
 
 
 def _transcribe_sim_audio():
   """在控件创建前执行转写回调，安全更新授课文本 widget 状态。"""
-  uploaded = st.session_state.get("sim_audio_upload")
+  uploaded = st.session_state.get("sim_audio_file")
   if uploaded is None:
     return
-  audio_bytes = uploaded.getvalue()
+  audio_bytes = uploaded["data"]
   if len(audio_bytes) > 50 * 1024 * 1024:
     st.session_state["sim_transcribe_notice"] = "音频超过 50 MB，请压缩或分段上传。"
     return
-  st.session_state["sim_transcribe_notice"] = "转写中……"
-  transcript = comp.transcribe_audio(
-    uploaded.name,
-    audio_bytes,
-    uploaded.type or "audio/wav",
-  )
+  transcript = comp.transcribe_audio(uploaded["name"], audio_bytes, uploaded["type"])
+
   if transcript:
     st.session_state["sim_transcript"] = transcript
 
@@ -740,88 +707,87 @@ def _apply_transcript(append=False):
 
 
 def _audio_changed():
+  uploaded = st.session_state.get("sim_audio_upload")
+  st.session_state["sim_audio_file"] = ({"name": uploaded.name, "type": uploaded.type or "audio/wav", "data": uploaded.getvalue()} if uploaded is not None else None)
   st.session_state["sim_transcribe_notice"] = "待转写：确认音频后点击转写按钮。"
   st.session_state["sim_transcript"] = ""
   st.session_state.pop("sim_transcribe_truncate", None)
 
 
-def page_simulation():
-  comp.page_header("mic", "跨学科教学模拟实训", "高保真跨学科教学模拟智能体", "教学模拟")
-
-  # Streamlit 会在控件离开页面后清理对应 key；返回模拟页时恢复演示授课文本。
-  # 用户在当前页面主动清空输入时 key 仍存在，因此不会被这里强制覆盖。
+def page_simulation(view):
   st.session_state.setdefault("sim_theme", SIM_THEMES[0])
-
-  left = st.container(key="sim_prepare")
-  with st.container(key="sim_feedback_layout"):
-    mid, right = st.columns([1.3, 1])
-  with left:
-    with st.container(border=True):
-      comp.section_title("授课输入区")
-      theme = comp.draft_widget("selectbox", "实训主题", options=SIM_THEMES, key="sim_theme")
-      teacher_input = comp.draft_widget("text_area",
-        "语音 / 文本授课输入",
-        height=130,
-        placeholder="输入你的授课片段（语音识别文本或手动录入）……",
-        key="sim_teacher_input",
-      )
-      audio_upload = st.file_uploader(
-        "上传授课音频",
-        type=["wav", "mp3", "m4a", "ogg", "webm"],
-        max_upload_size=50,
-        help="上传后可试听；转写调用 POST /api/transcribe，先预览返回的 text，再选择替换或追加。",
-        key="sim_audio_upload",
-        on_change=_audio_changed,
-      )
-      if audio_upload is not None:
-        audio_bytes = audio_upload.getvalue()
-        st.caption(f"{audio_upload.name} · {len(audio_bytes) / 1024 / 1024:.2f} MB · 上限 50 MB")
-        st.audio(audio_bytes, format=audio_upload.type or "audio/wav")
-        st.button(
-          "转写音频（先预览）",
-          width="stretch",
-          key="sim_transcribe_btn",
-          on_click=_transcribe_sim_audio,
-          disabled=len(audio_bytes) > 50 * 1024 * 1024,
-        )
-      if st.session_state.get("sim_transcribe_notice"):
-        st.caption(st.session_state["sim_transcribe_notice"])
-      if st.session_state.get("sim_transcript"):
-        transcript = comp.draft_widget("text_area", "检查并编辑转写结果", key="sim_transcript", height=150)
-        st.download_button("下载完整转写文本", transcript, file_name="transcript.txt", mime="text/plain")
-        previous = st.session_state.get("sim_teacher_input", "").strip()
-        combined = len(previous) + len(transcript) + (2 if previous else 0)
-        truncate = False
-        if max(combined, len(transcript)) > 5000:
-          st.warning("回填授课文本最多 5,000 字。请编辑缩短，或确认截取；完整转写仍可下载。")
-          truncate = st.checkbox("允许只回填前 5,000 字", key="sim_transcribe_truncate")
-        replace_col, append_col = st.columns(2)
-        with replace_col:
-          st.button("替换授课文本", on_click=_apply_transcript, disabled=not transcript.strip() or (len(transcript) > 5000 and not truncate), key="sim_transcript_replace", width="stretch")
-        with append_col:
-          st.button("追加到末尾", on_click=_apply_transcript, args=(True,), disabled=not transcript.strip() or (combined > 5000 and not truncate), key="sim_transcript_append", width="stretch")
+  theme = st.session_state["sim_theme"]
+  teacher_input = st.session_state.get("sim_teacher_input", "")
+  if view == "prepare":
+    comp.section_title("授课输入区")
+    theme = comp.draft_widget("selectbox", "实训主题", options=SIM_THEMES, key="sim_theme")
+    teacher_input = comp.draft_widget("text_area",
+      "语音 / 文本授课输入",
+      height=130,
+      placeholder="输入你的授课片段（语音识别文本或手动录入）……",
+      key="sim_teacher_input",
+    )
+    audio_upload = st.file_uploader(
+      "上传授课音频",
+      type=["wav", "mp3", "m4a", "ogg", "webm"],
+      max_upload_size=50,
+      help="上传后可试听；转写调用 POST /api/transcribe，先预览返回的 text，再选择替换或追加。",
+      key="sim_audio_upload",
+      on_change=_audio_changed,
+    )
+    audio_file = st.session_state.get("sim_audio_file")
+    if audio_file is not None:
+      audio_bytes = audio_file["data"]
+      st.caption(f"{audio_file['name']} · {len(audio_bytes) / 1024 / 1024:.2f} MB · 上限 50 MB")
+      st.audio(audio_bytes, format=audio_file["type"] or "audio/wav")
       st.button(
-        "开始模拟授课",
-        type="primary", width="stretch",
-        on_click=_start_simulation,
-        key="sim_start_btn",
-        disabled=not teacher_input.strip(),
+        "转写音频（先预览）",
+        width="stretch",
+        key="sim_transcribe_btn",
+        on_click=_transcribe_sim_audio,
+        disabled=len(audio_bytes) > 50 * 1024 * 1024,
       )
-      if st.session_state["sim_started"]:
-        round_text = (
-          "等待第 1 轮学生互动"
-          if st.session_state["sim_round"] == 0
-          else f'已完成第 {st.session_state["sim_round"]} 轮学生互动'
-        )
-        st.markdown(
-          f'<div class="dsh-flow-status" style="background:rgba(47,143,78,.16); color:#9ED9AC; border:1px solid rgba(47,143,78,.35);">'
-          f'{comp.icon("activity", 14, "#9ED9AC")} 模拟授课进行中 · {round_text}</div>',
-          unsafe_allow_html=True,
-        )
-      st.caption("点击“开始模拟授课”只初始化课堂；点击互动按钮后才会请求统一智能体接口。")
-
-  with mid:
-    with st.container(border=True):
+    if st.session_state.get("sim_transcribe_notice"):
+      st.caption(st.session_state["sim_transcribe_notice"])
+    if st.session_state.get("sim_transcript"):
+      transcript = comp.draft_widget("text_area", "检查并编辑转写结果", key="sim_transcript", height=150)
+      st.download_button("下载完整转写文本", transcript, file_name="transcript.txt", mime="text/plain")
+      previous = st.session_state.get("sim_teacher_input", "").strip()
+      combined = len(previous) + len(transcript) + (2 if previous else 0)
+      truncate = False
+      if max(combined, len(transcript)) > 5000:
+        st.warning("回填授课文本最多 5,000 字。请编辑缩短，或确认截取；完整转写仍可下载。")
+        truncate = comp.draft_widget("checkbox", "允许只回填前 5,000 字", key="sim_transcribe_truncate")
+      replace_col, append_col = st.columns(2)
+      with replace_col:
+        st.button("替换授课文本", on_click=_apply_transcript, disabled=not transcript.strip() or (len(transcript) > 5000 and not truncate), key="sim_transcript_replace", width="stretch")
+      with append_col:
+        st.button("追加到末尾", on_click=_apply_transcript, args=(True,), disabled=not transcript.strip() or (combined > 5000 and not truncate), key="sim_transcript_append", width="stretch")
+    st.button(
+      "开始模拟授课",
+      type="primary", width="stretch",
+      on_click=_start_simulation,
+      key="sim_start_btn",
+      disabled=not teacher_input.strip(),
+    )
+    if st.session_state["sim_started"]:
+      round_text = (
+        "等待第 1 轮学生互动"
+        if st.session_state["sim_round"] == 0
+        else f'已完成第 {st.session_state["sim_round"]} 轮学生互动'
+      )
+      st.markdown(
+        f'<div class="dsh-flow-status" style="background:rgba(47,143,78,.16); color:#9ED9AC; border:1px solid rgba(47,143,78,.35);">'
+        f'{comp.icon("activity", 14, "#9ED9AC")} 模拟授课进行中 · {round_text}</div>',
+        unsafe_allow_html=True,
+      )
+    st.caption("点击“开始模拟授课”只初始化课堂；点击互动按钮后才会请求统一智能体接口。")
+  elif not st.session_state["sim_started"]:
+    comp.empty_view("02", "请先准备授课内容并开始模拟。")
+  elif view == "interaction":
+    st.caption("心流指标与虚拟学生画像为本地 Mock 示例；真实接口仅提供课堂建议。")
+    left, right = st.columns([1.3, 1])
+    with left:
       comp.section_title("虚拟学生反馈面板", "5 名性格化虚拟学生 · 认知仿真画像")
       if not st.session_state["sim_started"]:
         comp.info_card(
@@ -864,9 +830,7 @@ def page_simulation():
               unsafe_allow_html=True,
             )
         _render_agent_sources(st.session_state.get("sim_agent_result"))
-
-  with right:
-    with st.container(border=True):
+    with right:
       comp.section_title("心流自适应仪表盘", "认知负荷 / 参与度 / 困惑度 / 心流指数")
       comp.flow_dashboard(st.session_state["flow"], st.session_state.get("flow_status") or None)
       st.button(
@@ -876,9 +840,9 @@ def page_simulation():
         on_click=_advance_flow, args=(theme, teacher_input),
         key="sim_interact_btn",
       )
-      st.caption("每次点击只请求一轮 /api/agent-chat；接口失败时自动回退 Mock。")
-
-  with st.container(border=True):
+      st.caption("每次点击请求一轮课堂建议；失败保留本轮状态，可主动查看只读示例。")
+  elif view == "data":
+    st.caption("Mock 示例 · 以下多模态信号为本地演示数据，非音频或摄像头实测。")
     comp.section_title("多模态感知数据栏", "语音 + 视觉 + 交互 · 三模态时序特征提取")
     if not st.session_state["sim_started"]:
       st.caption("开始模拟授课后，展示 5 路多模态信号实时数值。")
@@ -903,9 +867,6 @@ def page_simulation():
             comp.signal_bar(name, val, note=note, color=color, icon=icon)
 
 
-# =====================================================================
-# 页面 03 · 智能教学诊断与反思
-# =====================================================================
 def _diagnosis_sample_text():
   """返回可直接编辑的内置文本课例。"""
   return LESSON_TEMPLATE.format(
@@ -1042,6 +1003,7 @@ def _normalise_diagnosis_result(result):
 def _clear_diagnosis_chat():
   """只清空教师对话，不影响课例和已生成的诊断报告。"""
   st.session_state["diag_chat_history"] = []
+  st.session_state["diag_chat_confirm"] = False
   st.session_state["diag_chat_error"] = ""
   st.session_state["diag_chat_preview"] = ""
 
@@ -1151,7 +1113,7 @@ def _render_diagnosis_chat():
     with title_col:
       comp.section_title("教师—智能体对话", "围绕课堂问题连续追问，自动关联当前课例与诊断结论")
     with clear_col:
-      clear_confirmed = st.checkbox("确认清空", key="diag_chat_confirm")
+      clear_confirmed = comp.draft_widget("checkbox", "确认清空", key="diag_chat_confirm")
       st.button(
         "清空对话", type="secondary", width="stretch",
         disabled=not bool(history) or not clear_confirmed, on_click=_clear_diagnosis_chat,
@@ -1205,9 +1167,32 @@ def _render_diagnosis_chat():
     st.button("发送给诊断智能体" if not st.session_state.get("diag_chat_error") else "重试发送", type="primary", width="stretch", key="diag_chat_send", on_click=_send_diagnosis_chat, disabled=not question.strip())
 
 
-def page_diagnosis():
-  comp.page_header("search", "智能教学诊断与反思", "因材施教智能教学诊断与元认知反思智能体", "智能诊断")
+def _generate_diagnosis():
+  lesson_text = st.session_state.get("diag_lesson_text", "")
+  if not lesson_text.strip():
+    return
+  question = (
+    "请作为 STEM 课堂诊断智能体，对下面的课例或课堂实录进行诊断。"
+    "请分析主要教学问题、课堂证据、可能原因和可执行的改进策略，并给出总结。\n\n"
+    f"课例正文：\n{lesson_text[:20000]}"
+  )
+  rep = comp.api_gate(
+    endpoint=config.API_ENDPOINTS["diag_report"],
+    payload=_agent_payload("diag_report", question),
+    mock_result={**DIAG_REPORT, "trace": TRACE_GRAPH},
+  )
+  if not comp.accept_result("03", rep, "input", "report"):
+    return
+  rep = _normalise_diagnosis_result(rep)
+  st.session_state["diag_result"] = rep
+  st.session_state["diag_trace"] = rep["trace"]
+  st.session_state["diag_input_snapshot"] = lesson_text
+  st.session_state["diag_generated_source"] = st.session_state["diag_input_source"]
+  st.session_state["diag_ready"] = True
+  comp.set_view("03", "report")
 
+
+def page_diagnosis(view):
   st.session_state.setdefault("diag_lesson_text", "")
   st.session_state.setdefault("diag_result", None)
   st.session_state.setdefault("diag_trace", None)
@@ -1218,115 +1203,76 @@ def page_diagnosis():
   st.session_state.setdefault("diag_upload_notice", "")
   st.session_state.setdefault("diag_chat_history", [])
 
-  st.markdown('[前往教师对话](#teacher-dialogue)')
-  with st.container(key="diag_layout"):
-    left, right = st.columns([1, 1.6])
-  with left:
-    with st.container(border=True):
-      comp.section_title("课例文本输入", "粘贴文本、上传 TXT / DOCX 或使用内置样例")
-      uploaded = st.file_uploader(
-        "上传教学设计或课堂对话文本",
-        type=["txt", "docx"],
-        max_upload_size=10,
-        help="TXT 支持 UTF-8、UTF-8 BOM、GB18030；DOCX 由前端提取正文和表格文字，随后仅发送纯文本。",
-        key="diag_upload",
-      )
-      if uploaded is not None:
-        raw = uploaded.getvalue()
-        signature = (uploaded.name, len(raw), hash(raw))
-        if signature != st.session_state["diag_upload_signature"]:
-          st.session_state.pop("diag_upload_pending", None)
-          try:
-            decoded, encoding = _read_lesson_upload(uploaded)
-            truncated = len(decoded) > 20000
-            file_kind = "DOCX" if uploaded.name.lower().endswith(".docx") else "TXT"
-            st.session_state["diag_upload_pending"] = {"text": decoded, "source": f"{file_kind} 上传：{uploaded.name}"}
-            suffix = "；填入时保留前 20,000 字" if truncated else ""
-            notice = f"已按 {encoding} 提取 {len(decoded):,} 字{suffix}。"
-            if not st.session_state.get("diag_lesson_text", "").strip():
-              _apply_lesson_upload()
-            st.session_state["diag_upload_notice"] = notice
-          except ValueError as exc:
-            st.session_state["diag_upload_notice"] = f"读取失败：{exc} 原课例未改变。"
-          st.session_state["diag_upload_signature"] = signature
+  lesson_text = st.session_state["diag_lesson_text"]
+  if view == "input":
+    comp.section_title("课例文本输入", "粘贴文本、上传 TXT / DOCX 或使用内置样例")
+    uploaded = st.file_uploader(
+      "上传教学设计或课堂对话文本",
+      type=["txt", "docx"],
+      max_upload_size=10,
+      help="TXT 支持 UTF-8、UTF-8 BOM、GB18030；DOCX 由前端提取正文和表格文字，随后仅发送纯文本。",
+      key="diag_upload",
+    )
+    if uploaded is not None:
+      raw = uploaded.getvalue()
+      signature = (uploaded.name, len(raw), hash(raw))
+      if signature != st.session_state["diag_upload_signature"]:
+        st.session_state.pop("diag_upload_pending", None)
+        try:
+          decoded, encoding = _read_lesson_upload(uploaded)
+          truncated = len(decoded) > 20000
+          file_kind = "DOCX" if uploaded.name.lower().endswith(".docx") else "TXT"
+          st.session_state["diag_upload_pending"] = {"text": decoded, "source": f"{file_kind} 上传：{uploaded.name}"}
+          suffix = "；填入时保留前 20,000 字" if truncated else ""
+          notice = f"已按 {encoding} 提取 {len(decoded):,} 字{suffix}。"
+          if not st.session_state.get("diag_lesson_text", "").strip():
+            _apply_lesson_upload()
+          st.session_state["diag_upload_notice"] = notice
+        except ValueError as exc:
+          st.session_state["diag_upload_notice"] = f"读取失败：{exc} 原课例未改变。"
+        st.session_state["diag_upload_signature"] = signature
 
-      if st.session_state["diag_upload_notice"]:
-        if not st.session_state["diag_upload_notice"].startswith("读取失败"):
-          st.caption(st.session_state["diag_upload_notice"])
-        else:
-          st.error(st.session_state["diag_upload_notice"])
-      if st.session_state.get("diag_upload_pending"):
-        st.warning("已有课例文字。是否用新文件内容替换？")
-        st.button("确认替换课例", on_click=_apply_lesson_upload, key="diag_upload_apply", width="stretch")
-        st.button("保留原课例", on_click=_discard_lesson_upload, key="diag_upload_cancel", width="stretch")
-
-      lesson_text = comp.draft_widget("text_area",
-        "粘贴或编辑课例文本",
-        height=230,
-        max_chars=20000,
-        placeholder="请粘贴课堂实录或教案正文，最多 20,000 字。",
-        key="diag_lesson_text",
-      )
-      st.button(
-        "载入内置样例课例",
-        type="secondary", width="stretch",
-        on_click=_use_diagnosis_sample,
-        key="diag_sample_btn",
-      )
-      can_gen = bool(lesson_text.strip())
-      if st.button(
-        "生成诊断报告",
-        type="primary", width="stretch",
-        disabled=not can_gen,
-        key="diag_gen_btn",
-      ):
-        question = (
-          "请作为 STEM 课堂诊断智能体，对下面的课例或课堂实录进行诊断。"
-          "请分析主要教学问题、课堂证据、可能原因和可执行的改进策略，并给出总结。\n\n"
-          f"课例正文：\n{lesson_text[:20000]}"
-        )
-        rep = comp.api_gate(
-          endpoint=config.API_ENDPOINTS["diag_report"],
-          payload=_agent_payload("diag_report", question),
-          mock_result={**DIAG_REPORT, "trace": TRACE_GRAPH},
-        )
-        rep = _normalise_diagnosis_result(rep)
-        st.session_state["diag_result"] = rep
-        st.session_state["diag_trace"] = rep["trace"]
-        st.session_state["diag_input_snapshot"] = lesson_text
-        st.session_state["diag_generated_source"] = st.session_state["diag_input_source"]
-        st.session_state["diag_ready"] = True
-        st.rerun()
-
-      if not can_gen:
-        st.caption("请先粘贴课例、上传 TXT / DOCX，或载入内置样例。")
-
-      result = st.session_state["diag_result"]
-      result_dirty = bool(result) and lesson_text != st.session_state["diag_input_snapshot"]
-      if result_dirty:
-        st.warning("课例内容已变化，当前仍显示上一次报告；请重新生成。")
-
-      if result and st.session_state.get("diag_trace"):
-        st.markdown('<div style="height:.4rem;"></div>', unsafe_allow_html=True)
-        if st.button("查看问题、理论与案例溯源", type="secondary", width="stretch", key="diag_trace_btn"):
-          _trace_dialog()
-
-  with right:
-    with st.container(border=True, key="diag_report_reading"):
-      comp.section_title("诊断报告")
-      rep = st.session_state["diag_result"]
-      st.session_state["diag_ready"] = bool(rep)
-      if not rep:
-        comp.info_card(
-          "报告待生成",
-          ["生成后展示：3 项诊断问题（证据 / 反向归因 / 改进建议）、反向归因结论、",
-           "问题、教育理论和支撑案例的完整溯源链路。"],
-          icon_name="timer", tone=config.COLORS["text_3"],
-        )
+    if st.session_state["diag_upload_notice"]:
+      if not st.session_state["diag_upload_notice"].startswith("读取失败"):
+        st.caption(st.session_state["diag_upload_notice"])
       else:
-        source = st.session_state["diag_generated_source"] or "课例文本"
-        st.caption(f"报告来源：{source} · 已缓存，页面切换不会重复请求")
-        st.caption(rep.get("meta", ""))
+        st.error(st.session_state["diag_upload_notice"])
+    if st.session_state.get("diag_upload_pending"):
+      st.warning("已有课例文字。是否用新文件内容替换？")
+      st.button("确认替换课例", on_click=_apply_lesson_upload, key="diag_upload_apply", width="stretch")
+      st.button("保留原课例", on_click=_discard_lesson_upload, key="diag_upload_cancel", width="stretch")
+
+    lesson_text = comp.draft_widget("text_area",
+      "粘贴或编辑课例文本",
+      height=230,
+      max_chars=20000,
+      placeholder="请粘贴课堂实录或教案正文，最多 20,000 字。",
+      key="diag_lesson_text",
+    )
+    st.button(
+      "载入内置样例课例",
+      type="secondary", width="stretch",
+      on_click=_use_diagnosis_sample,
+      key="diag_sample_btn",
+    )
+    st.button("生成诊断报告", type="primary", width="stretch", key="diag_gen_btn",
+              disabled=not lesson_text.strip(), on_click=_generate_diagnosis)
+  elif view == "chat":
+    _render_diagnosis_chat()
+  elif view == "report":
+    rep = st.session_state["diag_result"]
+    if not rep:
+      comp.empty_view("03", "诊断报告尚未生成。")
+      return
+    if lesson_text != st.session_state["diag_input_snapshot"]:
+      st.warning("课例内容已变化，当前为上一次报告；请返回课例输入重新生成。")
+    with st.container(key="reading_diagnosis"):
+      source = st.session_state["diag_generated_source"] or "课例文本"
+      st.caption(f"报告来源：{source} · 已缓存，页面切换不会重复请求")
+      st.caption(rep.get("meta", ""))
+      evidence_column, insight_column = st.columns([1.7, .8], gap="large")
+      with evidence_column:
+        comp.section_title("问题与课堂证据")
         for p in rep["problems"]:
           comp.info_card(
             f'{comp.safe_text(p.get("id", "?"))} {comp.safe_text(p.get("title", ""))}',
@@ -1339,18 +1285,21 @@ def page_diagnosis():
             f'理论锚点：{comp.safe_text(p.get("anchor", ""))}',
             color=config.NODE_TYPES["理论"],
           )
+        if rep.get("suggests"):
+          comp.section_title("改进建议清单")
+          for i, suggestion in enumerate(rep.get("suggests", []), start=1):
+            st.write(f"{i}. {suggestion}")
+      with insight_column:
+        comp.section_title("归因与溯源")
         comp.info_card(
           "反向归因结论",
           [comp.safe_text(rep.get("conclusion", ""))],
           icon_name="route", tone=config.COLORS["primary"],
         )
         _render_agent_sources(rep)
-        if rep.get("suggests"):
-          comp.section_title("改进建议清单")
-          for i, suggestion in enumerate(rep.get("suggests", []), start=1):
-            st.write(f"{i}. {suggestion}")
-
-  _render_diagnosis_chat()
+        if st.session_state.get("diag_trace"):
+          if st.button("查看问题、理论与案例溯源", key="diag_trace_btn", width="stretch"):
+            _trace_dialog()
 
 
 @st.dialog("图谱溯源 · 问题、理论与案例", width="large")
@@ -1442,6 +1391,7 @@ def _send_lesson_to_simulation():
   st.session_state["sim_teacher_input"] = lesson[:300]
   _reset_flow()
   st.session_state["sim_started"] = False
+  comp.set_view("02", "prepare")
   st.session_state["nav_radio"] = "02"
 
 
@@ -1452,6 +1402,7 @@ def _send_lesson_to_diagnosis():
   st.session_state["diag_lesson_text"] = lesson[:20000]
   st.session_state["diag_input_source"] = "课程设计工作台"
   st.session_state["diag_upload_notice"] = ""
+  comp.set_view("03", "input")
   st.session_state["nav_radio"] = "03"
 
 
@@ -1476,230 +1427,194 @@ def _apply_itrs_stem(res, fallback_itrs, fallback_stem):
     st.session_state["ws_stem"] = fallback_stem
 
 
-def page_workbench():
-  comp.page_header("wrench", "跨学科课程设计工作台", "人机协同跨学科课程设计智能工作台", "演示主线")
-
-  st.session_state.setdefault("ws_itrs", ITRS_DIMS)
-  st.session_state.setdefault("ws_stem", STEM_DIMS)
-  st.session_state.setdefault("ws_check_conclusion", CHECK_CONCLUSION)
-  st.session_state.setdefault("ws_design_context", None)
-  st.session_state.setdefault("ws_agent_result", None)
-  st.session_state.setdefault("ws_lesson_editor", st.session_state.get("ws_lesson") or "")
-
-  left, right = st.columns([1, 1.7])
-  with left:
-    with st.container(border=True):
-      comp.section_title("设计输入")
-      grade = comp.draft_widget("selectbox", "学段", options=["小学", "初中", "高中"], index=1, key="ws_grade")
-      topic = comp.draft_widget("text_input", "主题", value="碳中和·跨学科项目式学习", key="ws_topic")
-      hours = comp.draft_widget("slider", "课时", min_value=1, max_value=8, value=4, key="ws_hours")
-      st.markdown('<div style="height:.3rem;"></div>', unsafe_allow_html=True)
-
-      current_context = _ws_context(grade, topic, hours)
-      stored_context = st.session_state["ws_design_context"]
-      context_stale = (
-        st.session_state["ws_stage"] > 0
-        and stored_context != current_context
+def _workbench_action(action):
+  grade, topic, hours = _workbench_context_values()
+  current_context = _ws_context(grade, topic, hours)
+  stage = st.session_state["ws_stage"]
+  stale = stage > 0 and st.session_state.get("ws_design_context") != current_context
+  if action != "generate" and (stale or not _current_ws_lesson().strip() or stage != (1 if action == "iterate" else 2)):
+    return
+  if action == "generate":
+      mock_res = {
+        "stage": 1,
+        "lesson_md": LESSON_TEMPLATE.format(grade=grade, topic=topic, hours=hours),
+        "itrs": {k: v for k, v, _ in ITRS_DIMS},
+        "stem": {k: v for k, v, _ in STEM_DIMS},
+        "conclusion": None,
+      }
+      question = (
+        "请作为 STEM 教学设计智能体，生成一份可直接编辑的完整 Markdown 教案。"
+        "教案应包含教学目标、跨学科概念、项目任务、课堂活动、支架和评价方案。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}"
       )
-      if context_stale:
-        st.warning("设计输入已变化，旧教案已保留；请重新执行“AI 初生成”。")
+      res = comp.api_gate(
+        config.API_ENDPOINTS["workbench_design"],
+        _agent_payload("workbench_design", question),
+        mock_result=mock_res,
+      )
+      if not comp.accept_result("04", res, "prepare" if action == "generate" else "editor", "assessment" if action == "check" else "editor"):
+        return
+      if not isinstance(res, dict):
+        res = mock_res
+      is_real = comp.is_agent_response(res)
+      _set_ws_lesson(res.get("answer") if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
+      st.session_state["ws_agent_result"] = res if is_real else None
+      st.session_state["ws_stage"] = 1
+      st.session_state["ws_design_context"] = current_context
+      st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
+      _apply_itrs_stem(res, ITRS_DIMS, STEM_DIMS)
+      comp.set_view("04", "assessment" if action == "check" else "editor")
+  if action == "iterate":
+      cur = _current_ws_lesson()
+      mock_res = {
+        "stage": 2,
+        "lesson_md": _append_mark_once(cur, "人工迭代修正记录", EDIT_MARK_MD),
+        "itrs": None, "stem": None, "conclusion": None,
+      }
+      question = (
+        "请作为 STEM 教学设计智能体，优化下面这份人工编辑后的教案。"
+        "请保留合理内容，修复跨学科融合与活动衔接问题，并返回完整修订版 Markdown 教案。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
+      )
+      res = comp.api_gate(
+        config.API_ENDPOINTS["workbench_design"],
+        _agent_payload("workbench_design", question),
+        mock_result=mock_res,
+      )
+      if not comp.accept_result("04", res, "prepare" if action == "generate" else "editor", "assessment" if action == "check" else "editor"):
+        return
+      if not isinstance(res, dict):
+        res = mock_res
+      is_real = comp.is_agent_response(res)
+      _set_ws_lesson(res.get("answer") if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
+      st.session_state["ws_agent_result"] = res if is_real else None
+      st.session_state["ws_stage"] = 2
+      comp.set_view("04", "assessment" if action == "check" else "editor")
+  if action == "check":
+      cur = _current_ws_lesson()
+      mock_res = {
+        "stage": 3,
+        "lesson_md": _append_mark_once(cur, "素养对齐校验结果", CHECK_MARK_MD),
+        "itrs": {k: v for k, v, _ in ITRS_DIMS},
+        "stem": {k: v for k, v, _ in STEM_DIMS},
+        "conclusion": CHECK_CONCLUSION,
+      }
+      question = (
+        "请作为 STEM 教学设计智能体，对下面教案进行素养对齐校验。"
+        "请从科学思维、数学建模、工程实践、技术应用、社会责任等方面给出证据、"
+        "不足和改进建议，最后给出总体结论。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
+      )
+      res = comp.api_gate(
+        config.API_ENDPOINTS["workbench_design"],
+        _agent_payload("workbench_design", question),
+        mock_result=mock_res,
+      )
+      if not comp.accept_result("04", res, "prepare" if action == "generate" else "editor", "assessment" if action == "check" else "editor"):
+        return
+      if not isinstance(res, dict):
+        res = mock_res
+      is_real = comp.is_agent_response(res)
+      _set_ws_lesson(cur if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
+      st.session_state["ws_stage"] = 3
+      _apply_itrs_stem(res, ITRS_DIMS, STEM_DIMS)
+      st.session_state["ws_check_conclusion"] = (
+        res["answer"] if is_real else (res.get("conclusion") or CHECK_CONCLUSION)
+      )
+      st.session_state["ws_agent_result"] = res if is_real else None
+      comp.set_view("04", "assessment" if action == "check" else "editor")
 
-      _ws_steps_html()
 
-      with st.container(key="ws_action_row"):
-        b1, b2, b3 = st.columns(3)
-        with b1:
-          generate_clicked = st.button("AI 初生成", type="primary", width="stretch", key="ws_b1")
-        with b2:
-          iterate_clicked = st.button(
-            "提交人工迭代",
-            type="secondary", width="stretch",
-            disabled=st.session_state["ws_stage"] != 1 or context_stale or not _current_ws_lesson().strip(),
-            key="ws_b2",
-          )
-        with b3:
-          check_clicked = st.button(
-            "素养校验",
-            type="secondary", width="stretch",
-            disabled=st.session_state["ws_stage"] != 2 or context_stale or not _current_ws_lesson().strip(),
-            key="ws_b3",
-          )
+def _workbench_context_values():
+  return (st.session_state.setdefault("ws_grade", "初中"),
+          st.session_state.setdefault("ws_topic", "碳中和·跨学科项目式学习"),
+          st.session_state.setdefault("ws_hours", 4))
 
-      if generate_clicked:
-          mock_res = {
-            "stage": 1,
-            "lesson_md": LESSON_TEMPLATE.format(grade=grade, topic=topic, hours=hours),
-            "itrs": {k: v for k, v, _ in ITRS_DIMS},
-            "stem": {k: v for k, v, _ in STEM_DIMS},
-            "conclusion": None,
-          }
-          question = (
-            "请作为 STEM 教学设计智能体，生成一份可直接编辑的完整 Markdown 教案。"
-            "教案应包含教学目标、跨学科概念、项目任务、课堂活动、支架和评价方案。\n"
-            f"学段：{grade}\n主题：{topic}\n课时：{hours}"
-          )
-          res = comp.api_gate(
-            config.API_ENDPOINTS["workbench_design"],
-            _agent_payload("workbench_design", question),
-            mock_result=mock_res,
-          )
-          if not isinstance(res, dict):
-            res = mock_res
-          is_real = comp.is_agent_response(res)
-          _set_ws_lesson(res.get("answer") if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
-          st.session_state["ws_agent_result"] = res if is_real else None
-          st.session_state["ws_stage"] = 1
-          st.session_state["ws_design_context"] = current_context
-          st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
-          _apply_itrs_stem(res, ITRS_DIMS, STEM_DIMS)
-          st.rerun()
-      if iterate_clicked:
-          cur = _current_ws_lesson()
-          mock_res = {
-            "stage": 2,
-            "lesson_md": _append_mark_once(cur, "人工迭代修正记录", EDIT_MARK_MD),
-            "itrs": None, "stem": None, "conclusion": None,
-          }
-          question = (
-            "请作为 STEM 教学设计智能体，优化下面这份人工编辑后的教案。"
-            "请保留合理内容，修复跨学科融合与活动衔接问题，并返回完整修订版 Markdown 教案。\n"
-            f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
-          )
-          res = comp.api_gate(
-            config.API_ENDPOINTS["workbench_design"],
-            _agent_payload("workbench_design", question),
-            mock_result=mock_res,
-          )
-          if not isinstance(res, dict):
-            res = mock_res
-          is_real = comp.is_agent_response(res)
-          _set_ws_lesson(res.get("answer") if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
-          st.session_state["ws_agent_result"] = res if is_real else None
-          st.session_state["ws_stage"] = 2
-          st.rerun()
-      if check_clicked:
-          cur = _current_ws_lesson()
-          mock_res = {
-            "stage": 3,
-            "lesson_md": _append_mark_once(cur, "素养对齐校验结果", CHECK_MARK_MD),
-            "itrs": {k: v for k, v, _ in ITRS_DIMS},
-            "stem": {k: v for k, v, _ in STEM_DIMS},
-            "conclusion": CHECK_CONCLUSION,
-          }
-          question = (
-            "请作为 STEM 教学设计智能体，对下面教案进行素养对齐校验。"
-            "请从科学思维、数学建模、工程实践、技术应用、社会责任等方面给出证据、"
-            "不足和改进建议，最后给出总体结论。\n"
-            f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
-          )
-          res = comp.api_gate(
-            config.API_ENDPOINTS["workbench_design"],
-            _agent_payload("workbench_design", question),
-            mock_result=mock_res,
-          )
-          if not isinstance(res, dict):
-            res = mock_res
-          is_real = comp.is_agent_response(res)
-          _set_ws_lesson(cur if is_real else (res.get("lesson_md") or mock_res["lesson_md"]))
-          st.session_state["ws_stage"] = 3
-          _apply_itrs_stem(res, ITRS_DIMS, STEM_DIMS)
-          st.session_state["ws_check_conclusion"] = (
-            res["answer"] if is_real else (res.get("conclusion") or CHECK_CONCLUSION)
-          )
-          st.session_state["ws_agent_result"] = res if is_real else None
-          st.rerun()
-      stage = st.session_state["ws_stage"]
-      if st.button("重置演示流程", width="stretch", disabled=stage == 0, key="ws_reset"):
-        st.session_state["ws_stage"] = 0
-        _set_ws_lesson("")
-        st.session_state["ws_design_context"] = None
-        st.session_state["ws_itrs"] = ITRS_DIMS
-        st.session_state["ws_stem"] = STEM_DIMS
-        st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
-        st.session_state["ws_agent_result"] = None
-        st.rerun()
 
-      st.caption("三步严格按序解锁：AI 初生成、人工编辑并提交、素养对齐校验。")
+def _reset_workbench():
+  st.session_state["ws_stage"] = 0
+  _set_ws_lesson("")
+  st.session_state["ws_design_context"] = None
+  st.session_state["ws_itrs"] = ITRS_DIMS
+  st.session_state["ws_stem"] = STEM_DIMS
+  st.session_state["ws_check_conclusion"] = CHECK_CONCLUSION
+  st.session_state["ws_agent_result"] = None
+  comp.set_view("04", "prepare")
+  for prefix in ("request_error_", "fallback_", "preview_"):
+    st.session_state.pop(prefix + "04", None)
 
-  with right:
-    with st.container(border=True):
-      comp.section_title("可编辑教案", "人工修改会实时保存在当前会话")
-      lesson = _current_ws_lesson()
-      if not lesson:
-        comp.info_card(
-          "教案待生成",
-          ["在左栏输入学段 / 主题 / 课时，点击“AI 初生成”即可获得完整跨学科教案。",
-           "推荐演示输入：主题 = 碳中和·跨学科项目式学习。"],
-          icon_name="timer", tone=config.COLORS["text_3"],
-        )
-      else:
-        tab_edit, tab_preview = st.tabs(["编辑 Markdown", "预览教案"])
-        with tab_edit:
-          edited_lesson = comp.draft_widget("text_area",
-            "教案 Markdown（可直接编辑）",
-            height=520,
-            key="ws_lesson_editor",
-          )
-          st.session_state["ws_lesson"] = edited_lesson
-          st.caption("编辑内容会用于下一步人工迭代、素养校验和跨页传递。")
-        with tab_preview:
-          st.markdown(edited_lesson)
-        _render_agent_sources(st.session_state.get("ws_agent_result"))
 
-        send_sim, send_diag = st.columns(2)
-        with send_sim:
-          st.button(
-            "送入教学模拟",
-            width="stretch",
-            disabled=context_stale,
-            on_click=_send_lesson_to_simulation,
-            key="ws_send_sim",
-          )
-        with send_diag:
-          st.button(
-            "送入智能诊断",
-            width="stretch",
-            disabled=context_stale,
-            on_click=_send_lesson_to_diagnosis,
-            key="ws_send_diag",
-          )
-
-  with st.container(border=True):
-    comp.section_title("素养达标评估", "ITRS 能力四维 + STEM 素养五维")
-    if st.session_state["ws_stage"] == 0:
+def page_workbench(view):
+  grade, topic, hours = _workbench_context_values()
+  current_context = _ws_context(grade, topic, hours)
+  stage = st.session_state["ws_stage"]
+  stale = stage > 0 and st.session_state.get("ws_design_context") != current_context
+  st.caption(" → ".join(f"{'✓ ' if stage >= i else ''}{name}" for i, name in enumerate(("AI 初生成", "人工迭代", "素养校验"), 1)))
+  if stale:
+    st.warning("设计参数已变化，旧教案已保留；请返回设计准备重新初生成。")
+  if view == "prepare":
+    parameter_column, guide_column = st.columns([1.5, .85], gap="large")
+    with parameter_column:
+      comp.section_title("设计准备")
+      comp.draft_widget("selectbox", "学段", options=["小学", "初中", "高中"], key="ws_grade")
+      comp.draft_widget("text_input", "主题", key="ws_topic")
+      comp.draft_widget("slider", "课时", min_value=1, max_value=8, key="ws_hours")
+      st.button("AI 初生成", key="ws_b1", type="primary", width="stretch", on_click=_workbench_action, args=("generate",))
+      st.button("重置演示流程", key="ws_reset", width="stretch", disabled=stage == 0, on_click=_reset_workbench)
+    with guide_column:
+      comp.section_title("人机协同路径")
       comp.info_card(
-        "评估待生成",
-        ["生成教案后展示 ITRS 与 STEM 预估达标率；完成素养校验后输出结论。"],
+        "三阶段设计约束",
+        ["01 · AI 提供可编辑的教案起点", "02 · 师范生修订后再提交迭代", "03 · 完成 ITRS 与 STEM 素养校验"],
+        icon_name="route", tone=config.COLORS["accent"],
+      )
+  elif view == "editor":
+    if not _current_ws_lesson():
+      comp.empty_view("04", "教案尚未生成。")
+      return
+    with st.container(key="reading_lesson"):
+      mode = comp.draft_widget("radio", "教案显示", options=["编辑 Markdown", "预览教案"], horizontal=True, key="lesson_display")
+      if mode == "编辑 Markdown":
+        comp.draft_widget("text_area", "教案 Markdown（可直接编辑）", height=520, key="ws_lesson_editor")
+      else:
+        st.markdown(_current_ws_lesson())
+      _render_agent_sources(st.session_state.get("ws_agent_result"))
+      st.caption("三步按序解锁；当前编辑内容用于人工迭代、素养校验和跨页传递。")
+      st.button("提交人工迭代", key="ws_b2", disabled=stage != 1 or stale or not _current_ws_lesson().strip(),
+                on_click=_workbench_action, args=("iterate",))
+      st.button("素养校验", key="ws_b3", disabled=stage != 2 or stale or not _current_ws_lesson().strip(),
+                on_click=_workbench_action, args=("check",))
+      st.button("送入教学模拟", key="ws_send_sim", disabled=stale, on_click=_send_lesson_to_simulation)
+      st.button("送入智能诊断", key="ws_send_diag", disabled=stale, on_click=_send_lesson_to_diagnosis)
+  elif view == "assessment":
+    if stage == 0:
+      comp.empty_view("04", "尚无素养评估结果。")
+      return
+    st.caption("ITRS 与 STEM 数值为内置 Mock 示例；真实接口的校验结论单独展示。")
+    col1, col2 = st.columns(2)
+    with col1:
+      st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.3rem;">ITRS 师范生教学能力（四维）</div>', unsafe_allow_html=True)
+      for name, val, color in st.session_state["ws_itrs"]:
+        comp.signal_bar(comp.safe_text(name), val, note="达标率", color=color)
+    with col2:
+      st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.3rem;">STEM 核心素养（五维）</div>', unsafe_allow_html=True)
+      for name, val, color in st.session_state["ws_stem"]:
+        comp.signal_bar(comp.safe_text(name), val, note="达标率", color=color)
+
+    if st.session_state["ws_stage"] < 3:
+      comp.info_card(
+        "待校验",
+        ["当前为 AI 预估达标率。完成“素养校验”后，将输出结论与可溯源证据链。"],
         icon_name="timer", tone=config.COLORS["text_3"],
       )
     else:
-      col1, col2 = st.columns(2)
-      with col1:
-        st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.3rem;">ITRS 师范生教学能力（四维）</div>', unsafe_allow_html=True)
-        for name, val, color in st.session_state["ws_itrs"]:
-          comp.signal_bar(comp.safe_text(name), val, note="达标率", color=color)
-      with col2:
-        st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.3rem;">STEM 核心素养（五维）</div>', unsafe_allow_html=True)
-        for name, val, color in st.session_state["ws_stem"]:
-          comp.signal_bar(comp.safe_text(name), val, note="达标率", color=color)
-
-      if st.session_state["ws_stage"] < 3:
-        comp.info_card(
-          "待校验",
-          ["当前为 AI 预估达标率。完成“素养校验”后，将输出结论与可溯源证据链。"],
-          icon_name="timer", tone=config.COLORS["text_3"],
-        )
-      else:
-        comp.info_card(
-          "校验结论与证据链",
-          [f"<b>{comp.safe_text(st.session_state['ws_check_conclusion'])}</b>"],
-          icon_name="check", tone=config.COLORS["success"],
-        )
+      comp.info_card(
+        "校验结论与证据链",
+        [f"<b>{comp.safe_text(st.session_state['ws_check_conclusion'])}</b>"],
+        icon_name="check", tone=config.COLORS["success"],
+      )
 
 
-# =====================================================================
-# 页面 05 · 教育研究孵化助手
-# =====================================================================
 def _diagnosis_to_research_pain():
   """把最近一次诊断缓存压缩为科研问题描述。"""
   report = st.session_state.get("diag_result")
@@ -1725,6 +1640,7 @@ def _diagnosis_to_research_pain():
 
 
 def _import_diagnosis_to_research():
+  comp.set_view("05", "input")
   pain = _diagnosis_to_research_pain()
   if not pain:
     return
@@ -1775,16 +1691,53 @@ def _normalise_research_result(result):
   return normalised
 
 
-def page_research():
-  comp.page_header("flask-conical", "教育研究孵化助手", "课堂数据驱动教育研究孵化智能伙伴", "科研孵化")
+def _generate_research():
+  pain = st.session_state.get("research_pain", "")
+  if not pain.strip():
+    return
+  source = _research_source()
+  mock_res = {
+    "topic_md": RESEARCH_TOPIC_MD,
+    "lit_md": LIT_OUTLINE_MD,
+    "survey_md": SURVEY_DRAFT_MD,
+    "exp_md": EXP_DRAFT_MD,
+  }
+  question = (
+    "请作为 STEM 教育科研智能体，把下面教学实践中值得研究的现象或问题，"
+    "转化为一份可执行的小型教育研究方案。"
+    "请包含研究选题与依据、研究问题、文献综述提纲、研究方法、样本与过程、"
+    "问卷或访谈工具初稿、数据分析思路和预期成果。\n\n"
+    f"教学现象或研究问题：\n{pain[:2000]}"
+  )
+  result = comp.api_gate(
+    endpoint=config.API_ENDPOINTS["research_plan"],
+    payload=_agent_payload("research_plan", question),
+    mock_result=mock_res,
+  )
+  if not comp.accept_result("05", result, "input", "result"):
+    return
+  st.session_state["research_result"] = _normalise_research_result(result)
+  st.session_state["research_input_snapshot"] = pain
+  st.session_state["research_generated_source"] = source
+  st.session_state["research_ready"] = True
+  comp.set_view("05", "result")
 
+
+def _research_source():
+  source = st.session_state.get("research_input_source", "独立输入")
+  if source == "最近一次诊断结果" and st.session_state.get("research_pain") != st.session_state.get("research_imported_pain"):
+    return "诊断结果带入后编辑"
+  return source
+
+
+def page_research(view):
   st.session_state.setdefault("research_result", None)
   st.session_state.setdefault("research_input_snapshot", None)
   st.session_state.setdefault("research_input_source", "独立输入")
   st.session_state.setdefault("research_generated_source", "")
   st.session_state.setdefault("research_imported_pain", "")
 
-  with st.container(border=True, key="research_prepare"):
+  if view == "input":
     comp.section_title("教育研究问题输入", "从教学现象出发 · 图谱关联科研方法子域")
     st.markdown('<div class="dsh-research-hints"><span>学段 · 在哪个年级？</span><span>课堂现象 · 发生了什么？</span><span>学生表现 · 有哪些证据？</span><span>教师观察 · 想弄清什么？</span></div>', unsafe_allow_html=True)
     st.button("载入研究问题示例", key="research_sample", on_click=_queue_research_input, args=(DEFAULT_RESEARCH_PAIN, "内置示例"))
@@ -1807,87 +1760,33 @@ def page_research():
     if source == "最近一次诊断结果" and pain != imported:
       source = "诊断结果带入后编辑"
     st.caption(f"当前来源：{source} · 最多 2,000 字")
-
-    c_import, c_generate = st.columns([1, 1.5])
-    with c_import:
-      if st.session_state.get("diag_result") and st.session_state.get("diag_lesson_text") != st.session_state.get("diag_input_snapshot"):
-        st.caption("注意：最近诊断基于旧课例，带入前请核对内容。")
-      st.button(
-        "带入最近诊断结果",
-        width="stretch",
-        disabled=not isinstance(st.session_state.get("diag_result"), dict),
-        on_click=_import_diagnosis_to_research,
-        key="research_import_diag_btn",
-      )
-    with c_generate:
-      if st.button(
-        "生成研究方案",
-        type="primary", width="stretch",
-        disabled=not pain.strip(),
-        key="research_btn",
-      ):
-        mock_res = {
-          "topic_md": RESEARCH_TOPIC_MD,
-          "lit_md": LIT_OUTLINE_MD,
-          "survey_md": SURVEY_DRAFT_MD,
-          "exp_md": EXP_DRAFT_MD,
-        }
-        question = (
-          "请作为 STEM 教育科研智能体，把下面教学实践中值得研究的现象或问题，"
-          "转化为一份可执行的小型教育研究方案。"
-          "请包含研究选题与依据、研究问题、文献综述提纲、研究方法、样本与过程、"
-          "问卷或访谈工具初稿、数据分析思路和预期成果。\n\n"
-          f"教学现象或研究问题：\n{pain[:2000]}"
-        )
-        result = comp.api_gate(
-          endpoint=config.API_ENDPOINTS["research_plan"],
-          payload=_agent_payload("research_plan", question),
-          mock_result=mock_res,
-        )
-        st.session_state["research_result"] = _normalise_research_result(result)
-        st.session_state["research_input_snapshot"] = pain
-        st.session_state["research_generated_source"] = source
-        st.session_state["research_ready"] = True
-        st.rerun()
-
-  result = st.session_state["research_result"]
-  st.session_state["research_ready"] = bool(result)
-  if result:
-    if pain != st.session_state["research_input_snapshot"]:
-      st.warning("研究问题已变化，当前仍显示上一次方案；请重新生成。")
-    generated_source = st.session_state["research_generated_source"] or "独立输入"
-    st.caption(f"方案来源：{generated_source} · 已缓存，切换标签页不会重复请求")
+    if st.session_state.get("diag_result") and st.session_state.get("diag_lesson_text") != st.session_state.get("diag_input_snapshot"):
+      st.caption("最近诊断基于旧课例，带入前请核对内容。")
+    st.button("带入最近诊断结果", key="research_import_diag_btn", disabled=not isinstance(st.session_state.get("diag_result"), dict), on_click=_import_diagnosis_to_research)
+    st.button("生成研究方案", key="research_btn", type="primary", disabled=not pain.strip(), on_click=_generate_research)
+  elif view == "result":
+    result = st.session_state["research_result"]
+    if not result:
+      comp.empty_view("05", "研究方案尚未生成。")
+      return
+    if st.session_state.get("research_pain") != st.session_state["research_input_snapshot"]:
+      st.warning("研究问题已变化，当前为上一次方案；请返回研究问题重新生成。")
+    st.caption("方案来源：" + (st.session_state["research_generated_source"] or "独立输入"))
     text = result["answer"] if comp.is_agent_response(result) else "\n\n".join(result[k] for k in ("topic_md", "lit_md", "survey_md", "exp_md"))
     st.download_button("下载研究方案", text, file_name="research-plan.md", mime="text/markdown", key="research_download")
-    with st.container(key="research_reading"):
+    with st.container(key="reading_research"):
       if comp.is_agent_response(result):
-        comp.section_title("智能体完整研究方案", "真实后端统一文本回答")
         st.markdown(result["answer"])
         _render_agent_sources(result)
       else:
         st.caption("Mock 示例方案 · 非真实智能体回答")
-        t1, t2, t3 = st.tabs(["研究选题", "文献综述提纲", "问卷与实验设计初稿"])
-        with t1:
-          st.markdown(result["topic_md"])
-        with t2:
-          st.markdown(result["lit_md"])
-        with t3:
-          st.markdown(result["survey_md"])
-          st.divider()
+        choices = {"研究选题": "topic_md", "文献综述提纲": "lit_md", "问卷与实验设计初稿": "survey_md"}
+        section = comp.draft_widget("radio", "方案章节", options=list(choices), horizontal=True, key="research_section")
+        st.markdown(result[choices[section]])
+        if section == "问卷与实验设计初稿":
           st.markdown(result["exp_md"])
-  else:
-    comp.info_card(
-      "等待生成",
-      ["输入值得研究的教学现象或问题并点击“生成研究方案”，将一次性输出：",
-       "研究选题（含选题依据与创新点）、文献综述提纲、问卷与实验设计初稿。",
-       "教育科研方法子图将关联教学问题、研究选题与设计型研究范式。"],
-      icon_name="timer", tone=config.COLORS["text_3"],
-    )
 
 
-# =====================================================================
-# 页面 06 · 技术底座·知识图谱引擎
-# =====================================================================
 def _domain_label(dom_id):
   if dom_id == "all":
     return config.KG_ALL_NAME
@@ -1897,43 +1796,43 @@ def _domain_label(dom_id):
   return dom_id
 
 
-def page_kg():
-  comp.page_header("database", "技术底座·知识图谱引擎", "多源异构领域知识引擎（动态语义知识图谱）", "技术底座")
-
-  st.markdown(
-    f'<div style="margin-bottom:.5rem;">'
-    + "".join(
-      f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);">'
-      f'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{c};margin-right:.3rem;"></span>'
-      f'{comp.safe_text(t)}</span>'
-      for t, c in config.NODE_TYPES.items()
-    )
-    + "</div>",
-    unsafe_allow_html=True,
-  )
-
-  total_n = len(KG_OVERVIEW["nodes"])
-  total_e = len(KG_OVERVIEW["edges"])
-  c1, c2, c3, c4 = st.columns(4)
-  with c1:
-    comp.stat_card(f"{total_n}", "实体总数", "全局总览", icon_name="layers")
-  with c2:
-    comp.stat_card(f"{total_e}", "关系总数", "含 8 条跨域关联", icon_name="git-fork")
-  with c3:
-    comp.stat_card("6", "知识子域", "多源异构融合", "database")
-  with c4:
-    comp.stat_card("8", "覆盖学科", "理化生地数工+教育", icon_name="globe")
-
-  st.markdown('<div style="height:.4rem;"></div>', unsafe_allow_html=True)
-  col_sel, col_info = st.columns([1, 2.2])
-  with col_sel:
-    domain = st.selectbox(
-      "切换知识子域",
-      ["all"] + config.KG_SUBDOMAIN_IDS,
-      format_func=_domain_label,
-      key="kg_domain",
-    )
-  with col_info:
+def page_kg(view):
+  domain = comp.draft_widget("selectbox", "切换知识子域", options=["all"] + config.KG_SUBDOMAIN_IDS,
+                             format_func=_domain_label, key="kg_domain")
+  data = KG_OVERVIEW if domain == "all" else KG_DATA[domain]
+  st.caption("内置示例知识图谱 · 当前子域在三个视图间保留")
+  if view == "browse":
+    graph_column, detail_column = st.columns([2.2, .8], gap="large")
+    with graph_column:
+      st.markdown(
+        f'<div style="margin-bottom:.5rem;">'
+        + "".join(
+          f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);">'
+          f'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{c};margin-right:.3rem;"></span>'
+          f'{comp.safe_text(t)}</span>'
+          for t, c in config.NODE_TYPES.items()
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+      )
+      comp.render_kg(data["nodes"], data["edges"], height=560, key="kg_main")
+    with detail_column:
+      comp.section_title("节点快速查看")
+      comp.node_detail_panel(data["nodes"], data["edges"], key=f"kg_browse_detail_{domain}")
+  elif view == "detail":
+    comp.node_detail_panel(data["nodes"], data["edges"], key=f"kg_node_detail_{domain}")
+  elif view == "about":
+    total_n = len(KG_OVERVIEW["nodes"])
+    total_e = len(KG_OVERVIEW["edges"])
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+      comp.stat_card(f"{total_n}", "实体总数", "全局总览", icon_name="layers")
+    with c2:
+      comp.stat_card(f"{total_e}", "关系总数", "含 8 条跨域关联", icon_name="git-fork")
+    with c3:
+      comp.stat_card("6", "知识子域", "多源异构融合", "database")
+    with c4:
+      comp.stat_card("8", "覆盖学科", "理化生地数工+教育", icon_name="globe")
     if domain == "all":
       comp.info_card(
         "全局总览（合并视图）",
@@ -1952,72 +1851,64 @@ def page_kg():
         icon_name="database", tone=config.COLORS["accent"], light=True,
       )
 
-  data = KG_OVERVIEW if domain == "all" else KG_DATA[domain]
-  with st.container(border=True):
-    comp.section_title(" 可交互图谱画布", "节点悬浮显示描述 · 选择器查看详情")
-    comp.render_kg(data["nodes"], data["edges"], height=560, key="kg_main")
 
-  comp.section_title(" 节点详情", "下拉选择节点，等价于画布点击")
-  comp.node_detail_panel(data["nodes"], data["edges"], key=f"kg_node_detail_{domain}")
-
-
-# =====================================================================
-# 页面 07 · 成果与价值
-# =====================================================================
-def page_value():
-  comp.page_header("clipboard-list", "成果与价值", "项目创新点 · 落地成效 · 实证评估", "项目收尾")
-
-  comp.section_title("四大创新点", "源自四大智能体的新增硬核技术突破")
-  cols = st.columns(2)
-  for i, ag in enumerate(config.AGENTS):
-    with cols[i % 2]:
-      agent_name = comp.safe_text(ag["name"])
-      lines = [comp.safe_text(b) for b in ag["breakthroughs"]]
-      advantage = comp.safe_text(ag["advantage"])
-      st.markdown(
-        f"""<div class="dsh-info">
-        <div class="dsh-info-title">{comp.icon(ag["icon"], 18, config.COLORS["primary"])}
-        <span style="border-left:3px solid {config.COLORS['primary']}; padding-left:.5rem;">{agent_name}</span></div>
-        {''.join(f'<div class="dsh-info-line" style="font-size:.82rem;">{l}</div>' for l in lines)}
-        <div style="font-size:.8rem; color:#3A3129; background:#FDFBF6; border:1px solid rgba(0,0,0,.10); border-radius:8px; padding:.55rem .7rem; margin-top:.55rem; line-height:1.6;">
-         <b>答辩差异点</b>：{advantage}</div></div>""",
-        unsafe_allow_html=True,
-      )
-
-  comp.section_title("落地成效", "试点应用数据（Mock 示例，联调后接入实证台账）")
-  comp.info_card(
-    "Mock 示例数据",
-    ["本页数量、前后测和成长案例均用于演示页面能力，不代表已完成的真实实证结论。"],
-    icon_name="triangle-alert", tone=config.COLORS["warning"], light=True,
-  )
-  c = st.columns(6)
-  for i, (value, label, delta, icon) in enumerate(LANDING_STATS):
-    with c[i]:
-      comp.stat_card(value, label, delta, icon)
-
-  comp.section_title("实证评估", "准实验前后测 · ITRS 量表量化对比")
-  col_chart, col_case = st.columns([1.6, 1])
-  with col_chart:
-    with st.container(border=True):
-      st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.2rem;">ITRS 前后测对比（Mock 四维均值）</div>', unsafe_allow_html=True)
-      st.bar_chart(
-        {"维度": ITRS_DIM_NAMES, "前测": ITRS_PRE, "后测": ITRS_POST},
-        x="维度", y=["前测", "后测"],
-        height=300,
-      )
-      st.caption("Mock 示例：四维均值由 61.5 提升至 77.5，提升 15.9 分；真实统计结论需在获得原始样本后计算。")
-  with col_case:
+def page_value(view):
+  if view in ("impact", "evaluation"):
+    st.caption("Mock 示例数据 · 数量、前后测及成长案例仅用于演示，不代表真实实证结论。")
+  if view == "features":
+    comp.section_title("四大创新点", "源自四大智能体的新增硬核技术突破")
+    cols = st.columns(2)
+    for i, ag in enumerate(config.AGENTS):
+      with cols[i % 2]:
+        agent_name = comp.safe_text(ag["name"])
+        lines = [comp.safe_text(b) for b in ag["breakthroughs"]]
+        advantage = comp.safe_text(ag["advantage"])
+        st.markdown(
+          f"""<div class="dsh-info">
+          <div class="dsh-info-title">{comp.icon(ag["icon"], 18, config.COLORS["primary"])}
+          <span style="border-left:3px solid {config.COLORS['primary']}; padding-left:.5rem;">{agent_name}</span></div>
+          {''.join(f'<div class="dsh-info-line" style="font-size:.82rem;">{l}</div>' for l in lines)}
+          <div style="font-size:.8rem; color:#3A3129; background:#FDFBF6; border:1px solid rgba(0,0,0,.10); border-radius:8px; padding:.55rem .7rem; margin-top:.55rem; line-height:1.6;">
+           <b>答辩差异点</b>：{advantage}</div></div>""",
+          unsafe_allow_html=True,
+        )
+  elif view == "impact":
+    comp.section_title("落地成效", "试点应用数据（Mock 示例，联调后接入实证台账）")
     comp.info_card(
-      "成长轨迹案例 · 师范生A（Mock）",
-      ["ITRS 前测 60 分，后测 80 分（提升 20 分）",
-       "教案迭代 3 版（人机协同）",
-       "诊断报告识别“概念跃迁过大”，据此开展针对性改进",
-       "跨学科概念掌握度提升后，推送案例难度自动升级"],
-      icon_name="check", tone=config.COLORS["success"],
+      "Mock 示例数据",
+      ["本页数量、前后测和成长案例均用于演示页面能力，不代表已完成的真实实证结论。"],
+      icon_name="triangle-alert", tone=config.COLORS["warning"], light=True,
     )
-    comp.info_card(
-      "结语",
-      ["“教-学-研”三位一体闭环：从教学模拟到诊断反思，从课程设计到科研孵化，",
-       "全部数据沉淀于多源异构动态语义知识图谱，实现教师全周期培养。"],
-      icon_name="database", tone=config.COLORS["accent"],
-    )
+    for indexes, widths in (((0, 1, 2), [1.25, 1, .9]), ((3, 4, 5), [.9, 1.2, 1])):
+      row = st.columns(widths, gap="medium")
+      for column, index in zip(row, indexes):
+        value, label, delta, icon = LANDING_STATS[index]
+        with column:
+          comp.stat_card(value, label, delta, icon)
+  elif view == "evaluation":
+    comp.section_title("实证评估", "准实验前后测 · ITRS 量表量化对比")
+    col_chart, col_case = st.columns([1.6, 1])
+    with col_chart:
+      with st.container(border=True):
+        st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.2rem;">ITRS 前后测对比（Mock 四维均值）</div>', unsafe_allow_html=True)
+        st.bar_chart(
+          {"维度": ITRS_DIM_NAMES, "前测": ITRS_PRE, "后测": ITRS_POST},
+          x="维度", y=["前测", "后测"],
+          height=300,
+        )
+        st.caption("Mock 示例：四维均值由 61.5 提升至 77.5，提升 15.9 分；真实统计结论需在获得原始样本后计算。")
+    with col_case:
+      comp.info_card(
+        "成长轨迹案例 · 师范生A（Mock）",
+        ["ITRS 前测 60 分，后测 80 分（提升 20 分）",
+         "教案迭代 3 版（人机协同）",
+         "诊断报告识别“概念跃迁过大”，据此开展针对性改进",
+         "跨学科概念掌握度提升后，推送案例难度自动升级"],
+        icon_name="check", tone=config.COLORS["success"],
+      )
+      comp.info_card(
+        "结语",
+        ["“教-学-研”三位一体闭环：从教学模拟到诊断反思，从课程设计到科研孵化，",
+         "全部数据沉淀于多源异构动态语义知识图谱，实现教师全周期培养。"],
+        icon_name="database", tone=config.COLORS["accent"],
+      )

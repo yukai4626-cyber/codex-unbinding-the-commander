@@ -36,9 +36,20 @@ st.set_page_config(
 comp.inject_css()
 comp.init_session_state()
 
+
+def _select_module(pid):
+    """切换主模块并退出全局内容管理。"""
+    st.session_state["nav_radio"] = pid
+    st.session_state["shell_mode"] = "workspace"
+
+
+def _open_management():
+    """保留当前主模块，在右侧工作区打开内容管理。"""
+    st.session_state["shell_mode"] = "manage"
+
+
 # ========================= 侧边栏 =========================
 with st.sidebar:
-    # 顶部品牌区：柔和米白渐变衔接侧栏背景，文字自然换行，不使用功能图标。
     st.markdown(
         """<div class="dsh-brand">
         <div class="dsh-brand-eyebrow">STEM TEACHER EDUCATION</div>
@@ -48,36 +59,41 @@ with st.sidebar:
         </div>""",
         unsafe_allow_html=True,
     )
-    st.divider()
+    st.markdown('<div class="dsh-nav-label">工作区</div>', unsafe_allow_html=True)
 
-    # 导航单选菜单（key=nav_radio，页面内跳转按钮亦写入该状态实现联动）
-    nav_ids = [item["id"] for item in config.NAV_ITEMS]
-    name_map = {item["id"]: item for item in config.NAV_ITEMS}
+    current_nav = st.session_state.get("nav_radio", "01")
+    shell_mode = st.session_state.get("shell_mode", "workspace")
+    with st.container(key="module_navigation"):
+        for item in config.NAV_ITEMS:
+            active = shell_mode == "workspace" and current_nav == item["id"]
+            st.button(
+                item["name"],
+                key=f"main_nav_{item['id']}",
+                icon=item.get("material_icon", ":material/apps:"),
+                type="primary" if active else "secondary",
+                width="stretch",
+                on_click=_select_module,
+                args=(item["id"],),
+            )
 
-    def _nav_label(pid):
-        item = name_map[pid]
-        # 纯文本导航名称：前置 emoji 图标已移除，仅保留导航文字
-        # “★演示主线”标记由 inject_css 中的 CSS 伪元素统一渲染在条目右上角
-        return item["name"]
+    with st.container(key="sidebar_footer"):
+        st.button(
+            "内容管理",
+            key="open_management",
+            icon=":material/folder_managed:",
+            type="primary" if shell_mode == "manage" else "secondary",
+            width="stretch",
+            on_click=_open_management,
+        )
+        comp.mock_badge()
+        comp.backend_badge()
 
-    st.radio(
-        "页面导航",
-        nav_ids,
-        format_func=_nav_label,
-        key="nav_radio",
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    comp.mock_badge()
-    comp.backend_badge()
-
-    runtime_label = "Mock 演示版" if config.MOCK_MODE else "真实后端模式"
-    st.markdown(
-        f'<div class="dsh-foot">STEM教师教育一体化智能体<br>{config.VERSION} · {runtime_label}<br>'
-        f'统一接口：{config.API_BASE}/api/agent-chat</div>',
-        unsafe_allow_html=True,
-    )
+        runtime_label = "Mock 演示版" if config.MOCK_MODE else "真实后端模式"
+        st.markdown(
+            f'<div class="dsh-foot">{config.VERSION} · {runtime_label}<br>'
+            f'统一接口：{config.API_BASE}/api/agent-chat</div>',
+            unsafe_allow_html=True,
+        )
 
 # ========================= 页面调度 =========================
 PAGE_FUNCS = {
@@ -92,5 +108,17 @@ PAGE_FUNCS = {
 
 current = st.session_state.get("nav_radio", "01")
 render = PAGE_FUNCS.get(current, pages.page_overview)
-render()
-comp.persistence_controls()
+with st.container(key="workspace"):
+    if st.session_state.get("shell_mode") == "manage":
+        content = comp.management_frame()
+        with content:
+            comp.persistence_controls()
+            comp.save_status()
+    else:
+        view, content = comp.page_frame(current)
+        with content:
+            with st.container(key=f"view_body_{current}_{view}"):
+                comp.request_notice(current)
+                if not comp.render_mock_preview(current):
+                    render(view)
+            comp.save_status()

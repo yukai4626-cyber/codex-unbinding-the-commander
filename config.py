@@ -81,31 +81,52 @@ AGENT_TYPES = {
     "research_plan": "education_research",
 }
 
-# ========================= 主题色板（参照 cs2ze.org：纸感米底 + 深炭卡片 + Fluent 蓝） =========================
+# ========================= 主题色板（深灰噪点基底 + 玻璃卡片 + 冷蓝强调） =========================
 COLORS = {
-    "primary": "#0078D4",   # 主色 · Fluent 蓝
-    "accent": "#A67C52",    # 辅助 · 暖棕（米色侧边栏选中态）
-    "primary_soft": "#25A1F4",
-    "primary_deep": "#006ABC",
-    "bg": "#F4F0E8",        # 页面底色（浅米纸感 + 暖色径向微光 + 4% 噪点）
-    "card": "rgba(34, 38, 48, 0.85)",  # 内容卡片（深炭半透明）
-    "sidebar": "#E8DFCF",   # 侧边栏底色（米色）
-    "border": "#D9D0C0",    # 描边（浅色语境）
-    "text_1": "#2F261F",    # 一级文字（浅色语境）
-    "text_2": "#4A3D31",    # 二级文字（浅色语境）
-    "text_3": "#8A7A66",    # 三级文字（浅色语境）
-    "success": "#2F8F4E",
-    "warning": "#E8C55A",
-    "danger": "#E26D6D",
+    "primary": "#4D9FD1",       # 冷蓝交互强调
+    "accent": "#C28B62",        # 低饱和暖橙，只用于提示与研究重点
+    "primary_soft": "#65AED8",
+    "primary_deep": "#397FA9",
+    "bg": "#0B1016",
+    "card": "rgba(25, 35, 46, 0.66)",
+    "sidebar": "#0D141C",
+    "border": "rgba(174, 202, 224, 0.13)",
+    "text_1": "#EDF3F7",
+    "text_2": "#C5D0D8",
+    "text_3": "#9DACB9",
+    "success": "#6FAF8D",
+    "warning": "#D2A65A",
+    "danger": "#CF7A7A",
 }
-GRADIENT = "linear-gradient(135deg, #0078D4 0%, #25A1F4 100%)"
+GRADIENT = "linear-gradient(135deg, #397FA9 0%, #65AED8 100%)"
 
 # ========================= 导航菜单（7 页面） =========================
+# 页内目录与侧栏分离；视图 ID 仅用于当前会话，不进入业务接口或备份。
+PAGE_VIEWS = {
+    "01": [("intro", "项目简介"), ("architecture", "系统架构"), ("capabilities", "核心能力")],
+    "02": [("prepare", "授课准备"), ("interaction", "课堂互动"), ("data", "过程数据")],
+    "03": [("input", "课例输入"), ("report", "诊断报告"), ("chat", "教师对话")],
+    "04": [("prepare", "设计准备"), ("editor", "教案编辑"), ("assessment", "素养评估")],
+    "05": [("input", "研究问题"), ("result", "研究方案")],
+    "06": [("browse", "图谱浏览"), ("detail", "节点详情"), ("about", "图谱说明")],
+    "07": [("impact", "应用成效"), ("evaluation", "实证评估"), ("features", "项目特点")],
+}
+PAGE_DESCRIPTIONS = {
+    "01": "了解项目定位、系统架构与教师支持能力。",
+    "02": "准备授课内容，观察课堂互动与学习反馈。",
+    "03": "从具体课例出发，诊断问题并持续反思。",
+    "04": "准备参数、编辑教案，再检查素养对齐情况。",
+    "05": "把教学中的问题转化为可执行的研究方案。",
+    "06": "浏览知识子域，查看节点及其关联。",
+    "07": "查看应用成效、评估示例与项目特点。",
+}
+
 NAV_ITEMS = [
     {
         "id": "01",
         "name": "首页·项目总览",
         "icon": "house",
+        "material_icon": ":material/home:",
         "subtitle": "项目定位 · 整体架构 · 四大核心能力",
         "tag": "项目介绍",
     },
@@ -113,6 +134,7 @@ NAV_ITEMS = [
         "id": "02",
         "name": "跨学科教学模拟实训",
         "icon": "mic",
+        "material_icon": ":material/mic:",
         "subtitle": "高保真跨学科教学模拟智能体",
         "tag": "教学模拟",
     },
@@ -120,6 +142,7 @@ NAV_ITEMS = [
         "id": "03",
         "name": "智能教学诊断与反思",
         "icon": "search",
+        "material_icon": ":material/manage_search:",
         "subtitle": "因材施教智能教学诊断与元认知反思智能体",
         "tag": "智能诊断",
     },
@@ -127,6 +150,7 @@ NAV_ITEMS = [
         "id": "04",
         "name": "跨学科课程设计工作台",
         "icon": "wrench",
+        "material_icon": ":material/build:",
         "subtitle": "人机协同跨学科课程设计智能工作台",
         "tag": "演示主线",
     },
@@ -134,6 +158,7 @@ NAV_ITEMS = [
         "id": "05",
         "name": "教育研究孵化助手",
         "icon": "flask-conical",
+        "material_icon": ":material/science:",
         "subtitle": "课堂数据驱动教育研究孵化智能伙伴",
         "tag": "科研孵化",
     },
@@ -141,6 +166,7 @@ NAV_ITEMS = [
         "id": "06",
         "name": "技术底座·知识图谱引擎",
         "icon": "database",
+        "material_icon": ":material/hub:",
         "subtitle": "多源异构领域知识引擎（动态语义知识图谱）",
         "tag": "技术底座",
     },
@@ -148,6 +174,7 @@ NAV_ITEMS = [
         "id": "07",
         "name": "成果与价值",
         "icon": "clipboard-list",
+        "material_icon": ":material/analytics:",
         "subtitle": "项目创新点 · 落地成效 · 实证评估",
         "tag": "项目收尾",
     },
