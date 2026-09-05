@@ -81,24 +81,24 @@ AGENT_TYPES = {
     "research_plan": "education_research",
 }
 
-# ========================= 主题色板（深灰噪点基底 + 玻璃卡片 + 冷蓝强调） =========================
+# ========================= 主题色板（暖米纸感 + 深炭正文 + 暖棕强调） =========================
 COLORS = {
-    "primary": "#4D9FD1",       # 冷蓝交互强调
-    "accent": "#C28B62",        # 低饱和暖橙，只用于提示与研究重点
-    "primary_soft": "#65AED8",
-    "primary_deep": "#397FA9",
-    "bg": "#0B1016",
-    "card": "rgba(25, 35, 46, 0.66)",
-    "sidebar": "#0D141C",
-    "border": "rgba(174, 202, 224, 0.13)",
-    "text_1": "#EDF3F7",
-    "text_2": "#C5D0D8",
-    "text_3": "#9DACB9",
-    "success": "#6FAF8D",
-    "warning": "#D2A65A",
-    "danger": "#CF7A7A",
+    "primary": "#8C6E4A",
+    "accent": "#A67C52",
+    "primary_soft": "#DEC49F",
+    "primary_deep": "#6E5033",
+    "bg": "#F4F0E8",
+    "card": "#F1EBE2",
+    "sidebar": "#E8DFCF",
+    "border": "rgba(91, 74, 58, 0.16)",
+    "text_1": "#2F261F",
+    "text_2": "#4A3D31",
+    "text_3": "#6B5E52",
+    "success": "#6F9B7C",
+    "warning": "#C89547",
+    "danger": "#C86F6F",
 }
-GRADIENT = "linear-gradient(135deg, #397FA9 0%, #65AED8 100%)"
+GRADIENT = "linear-gradient(135deg, #684B2E 0%, #7A5D3B 100%)"
 
 # ========================= 导航菜单（7 页面） =========================
 # 页内目录与侧栏分离；视图 ID 仅用于当前会话，不进入业务接口或备份。

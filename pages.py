@@ -611,16 +611,16 @@ def page_overview(view):
       comp.mock_badge()
   elif view == "architecture":
       comp.section_title("系统整体架构", "应用层 → 能力层 → 知识图谱底座 → 教-学-研闭环")
-      st.mermaid_chart("""%%{init: {"theme": "base", "themeVariables": {
+      st.container(key="architecture_canvas").mermaid_chart("""%%{init: {"theme": "base", "themeVariables": {
       "fontFamily": "Segoe UI, Microsoft YaHei, sans-serif",
-      "background": "#121922",
-      "primaryColor": "#19232E",
-      "primaryTextColor": "#EDF3F7",
-      "primaryBorderColor": "#4D9FD1",
-      "lineColor": "#7792A4",
-      "clusterBkg": "#111A23",
-      "clusterBorder": "#304757",
-      "edgeLabelBackground": "#121922"
+      "background": "#252933",
+      "primaryColor": "#303540",
+      "primaryTextColor": "#F4F1EC",
+      "primaryBorderColor": "#8C6E4A",
+      "lineColor": "#B7A58E",
+      "clusterBkg": "#292E38",
+      "clusterBorder": "#76634D",
+      "edgeLabelBackground": "#252933"
     }}}%%
     graph TD
      subgraph APP["应用层 · 四大业务智能体"]
@@ -650,16 +650,16 @@ def page_overview(view):
      A3 -->|教学问题转化| A4
      A4 -->|研究成果沉淀| KG
      KG -->|图谱驱动仿真| A1
-     classDef appNode fill:#192631,stroke:#4D9FD1,color:#EDF3F7,stroke-width:1.4px
-     classDef capNode fill:#202A33,stroke:#C28B62,color:#EDF3F7,stroke-width:1.4px
-     classDef kgNode fill:#17232C,stroke:#6FAF8D,color:#EDF3F7,stroke-width:1.4px
+     classDef appNode fill:#303540,stroke:#8C6E4A,color:#F4F1EC,stroke-width:1.4px
+     classDef capNode fill:#34343A,stroke:#C89547,color:#F4F1EC,stroke-width:1.4px
+     classDef kgNode fill:#2D3834,stroke:#6F9B7C,color:#F4F1EC,stroke-width:1.4px
      class A1,A2,A3,A4 appNode
      class C1,C2,C3,C4,C5 capNode
      class K1,K2,K3,K4,K5,K6 kgNode
-     style APP fill:#101820,stroke:#304757,color:#EDF3F7,stroke-width:1px
-     style CAP fill:#101820,stroke:#304757,color:#EDF3F7,stroke-width:1px
-     style KG fill:#101820,stroke:#304757,color:#EDF3F7,stroke-width:1px
-     linkStyle default stroke:#7792A4,stroke-width:1.2px,color:#C5D0D8
+     style APP fill:#292E38,stroke:#76634D,color:#F4F1EC,stroke-width:1px
+     style CAP fill:#292E38,stroke:#76634D,color:#F4F1EC,stroke-width:1px
+     style KG fill:#292E38,stroke:#76634D,color:#F4F1EC,stroke-width:1px
+     linkStyle default stroke:#B7A58E,stroke-width:1.2px,color:#E8DFCF
     """)
   elif view == "capabilities":
     capability_columns = st.columns([1.15, .85], gap="large")
@@ -1316,17 +1316,17 @@ def _trace_dialog():
     n.setdefault("desc", "")
     n.setdefault("size", 24)
   edges = [tuple(e) for e in data.get("edges", [])]
-  with st.container(border=True):
+  with st.container(border=True, key="diagnosis_graph_canvas"):
     comp.render_kg(
       nodes, edges,
       height=430, key="trace_kg", hierarchical=True, direction="LR",
     )
   st.markdown(
     f'<div style="margin-top:.3rem;">'
-    f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["问题"]};margin-right:.3rem;"></span>诊断问题</span>'
-    f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["理论"]};margin-right:.3rem;"></span>教育理论锚点</span>'
-    f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["案例"]};margin-right:.3rem;"></span>支撑案例</span>'
-    f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["行为"]};margin-right:.3rem;"></span>行为归因</span>'
+    f'<span class="dsh-tag" style="background:#F1EBE2; color:#3A3129; border:1px solid rgba(58,49,41,.14);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["问题"]};margin-right:.3rem;"></span>诊断问题</span>'
+    f'<span class="dsh-tag" style="background:#F1EBE2; color:#3A3129; border:1px solid rgba(58,49,41,.14);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["理论"]};margin-right:.3rem;"></span>教育理论锚点</span>'
+    f'<span class="dsh-tag" style="background:#F1EBE2; color:#3A3129; border:1px solid rgba(58,49,41,.14);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["案例"]};margin-right:.3rem;"></span>支撑案例</span>'
+    f'<span class="dsh-tag" style="background:#F1EBE2; color:#3A3129; border:1px solid rgba(58,49,41,.14);"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{config.NODE_TYPES["行为"]};margin-right:.3rem;"></span>行为归因</span>'
     f'</div>',
     unsafe_allow_html=True,
   )
@@ -1565,7 +1565,7 @@ def page_workbench(view):
       comp.section_title("人机协同路径")
       comp.info_card(
         "三阶段设计约束",
-        ["01 · AI 提供可编辑的教案起点", "02 · 师范生修订后再提交迭代", "03 · 完成 ITRS 与 STEM 素养校验"],
+        ["AI 提供可编辑的教案起点", "师范生修订后再提交迭代", "完成 ITRS 与 STEM 素养校验"],
         icon_name="route", tone=config.COLORS["accent"],
       )
   elif view == "editor":
@@ -1807,7 +1807,7 @@ def page_kg(view):
       st.markdown(
         f'<div style="margin-bottom:.5rem;">'
         + "".join(
-          f'<span class="dsh-tag" style="background:#FDFBF6; color:#3A3129; border:1px solid rgba(0,0,0,0.10);">'
+          f'<span class="dsh-tag" style="background:#F1EBE2; color:#3A3129; border:1px solid rgba(58,49,41,.14);">'
           f'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{c};margin-right:.3rem;"></span>'
           f'{comp.safe_text(t)}</span>'
           for t, c in config.NODE_TYPES.items()
@@ -1815,7 +1815,8 @@ def page_kg(view):
         + "</div>",
         unsafe_allow_html=True,
       )
-      comp.render_kg(data["nodes"], data["edges"], height=560, key="kg_main")
+      with st.container(key="knowledge_graph_canvas"):
+        comp.render_kg(data["nodes"], data["edges"], height=560, key="kg_main")
     with detail_column:
       comp.section_title("节点快速查看")
       comp.node_detail_panel(data["nodes"], data["edges"], key=f"kg_browse_detail_{domain}")
@@ -1868,7 +1869,7 @@ def page_value(view):
           <div class="dsh-info-title">{comp.icon(ag["icon"], 18, config.COLORS["primary"])}
           <span style="border-left:3px solid {config.COLORS['primary']}; padding-left:.5rem;">{agent_name}</span></div>
           {''.join(f'<div class="dsh-info-line" style="font-size:.82rem;">{l}</div>' for l in lines)}
-          <div style="font-size:.8rem; color:#3A3129; background:#FDFBF6; border:1px solid rgba(0,0,0,.10); border-radius:8px; padding:.55rem .7rem; margin-top:.55rem; line-height:1.6;">
+          <div style="font-size:.8rem; color:#3A3129; background:#F1EBE2; border:1px solid rgba(58,49,41,.14); border-radius:8px; padding:.55rem .7rem; margin-top:.55rem; line-height:1.6;">
            <b>答辩差异点</b>：{advantage}</div></div>""",
           unsafe_allow_html=True,
         )
@@ -1889,7 +1890,7 @@ def page_value(view):
     comp.section_title("实证评估", "准实验前后测 · ITRS 量表量化对比")
     col_chart, col_case = st.columns([1.6, 1])
     with col_chart:
-      with st.container(border=True):
+      with st.container(border=True, key="evaluation_chart_canvas"):
         st.markdown('<div style="font-weight:700; color:#ffffff; margin-bottom:.2rem;">ITRS 前后测对比（Mock 四维均值）</div>', unsafe_allow_html=True)
         st.bar_chart(
           {"维度": ITRS_DIM_NAMES, "前测": ITRS_PRE, "后测": ITRS_POST},

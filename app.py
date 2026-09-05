@@ -59,8 +59,6 @@ with st.sidebar:
         </div>""",
         unsafe_allow_html=True,
     )
-    st.markdown('<div class="dsh-nav-label">工作区</div>', unsafe_allow_html=True)
-
     current_nav = st.session_state.get("nav_radio", "01")
     shell_mode = st.session_state.get("shell_mode", "workspace")
     with st.container(key="module_navigation"):

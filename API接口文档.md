@@ -3,6 +3,8 @@
 版本：V1.0
 依据：《STEM教师教育智能体前端接口说明.docx》
 
+后端实现优先级、最近联调状态和联合验收步骤见[《后端联调交接清单》](后端联调交接清单.md)。
+
 ## 1. 稳定接口
 
 前端四个业务页面统一调用：
@@ -55,6 +57,7 @@ streamlit run app.py --server.port 8502
 
 - `question`：用户输入以及页面整理出的必要上下文。
 - `agent_type`：由当前页面固定决定，前端不自行识别或猜测。
+- 后端应支持至少约 25,000 个 Unicode 字符的 `question`；前端不增加 `action`、会话 ID 或其他阶段字段。
 
 ## 4. 四个页面与 agent_type
 
@@ -78,7 +81,7 @@ streamlit run app.py --server.port 8502
 }
 ```
 
-未来可向后兼容增加来源字段：
+可选来源字段使用可直接展示的字符串数组：
 
 ```json
 {
@@ -94,7 +97,10 @@ streamlit run app.py --server.port 8502
 1. `answer` 是非空字符串；
 2. `agent_type` 是约定值，并与本次请求一致；
 3. `sources`、`graph_sources` 缺失时按空数组处理；
-4. 契约异常、网络失败或非 2xx 响应时回退当前页面的 Mock 数据。
+4. `sources`、`graph_sources` 存在时必须是可直接展示的字符串数组；
+5. 契约异常、网络失败或非 2xx 响应时，保留输入、已有结果和当前流程阶段，并停留在发起操作的视图显示错误。
+
+真实请求失败不计作成功，也不自动覆盖为 Mock。存在兜底的页面仅在用户主动点击“查看 Mock 示例”后只读展示，并提供返回原视图的入口。
 
 ## 6. 页面适配规则
 
@@ -103,6 +109,7 @@ streamlit run app.py --server.port 8502
 - 课程设计：初生成和人工迭代的 `answer` 作为完整 Markdown 教案；素养校验的 `answer` 作为校验结论。
 - 科研孵化：`answer` 作为完整研究方案展示。
 - 当来源字段存在时，页面追加“回答依据”卡片。
+- `trace`、`itrs`、`stem`、`stage` 等旧结构化字段不属于当前稳定返回契约；图谱、心流、多模态及评分指标仍使用前端明确标注的本地演示数据。
 
 ## 7. 加载、超时与错误处理
 
@@ -110,7 +117,8 @@ streamlit run app.py --server.port 8502
 - 读取超时：180 秒，避免 GraphRAG、向量检索、工作流和 LoRA 生成被 10 秒或 20 秒的短超时中断。
 - 真实请求期间显示“智能体正在检索知识并生成回答……”。
 - 页面不展示后端堆栈、内部配置或完整异常详情。
-- 错误响应常见格式为 `{"detail": "错误信息"}`；前端统一显示友好状态并自动回退 Mock。
+- 错误响应使用非 2xx 和 JSON `{"detail": "错误信息"}`；前端显示友好状态并保留本次错误，不自动跳转或推进业务阶段。
+- 后端不得用 HTTP 200 返回空回答、错误对象、`success: false` 或错误的 `agent_type`。
 
 ## 8. 基础联调验收
 
@@ -149,6 +157,7 @@ streamlit run app.py --server.port 8502
 - Python 3.10.11 / Streamlit 1.61.1 / streamlit-agraph 0.0.45；四文件编译、七页及关键流程 AppTest 通过。
 - 从本机 8502 网页输入研究问题，`education_research` 返回 HTTP 200，完整方案显示正常。
 - 从诊断页发送教师问题，`classroom_diagnosis` 返回 HTTP 200，对话显示正常。
+- 已验证的真实智能体请求仅限上述科研生成和诊断教师对话。课程设计初生成/人工迭代/素养校验、诊断报告、教学模拟以及后端变更后的科研生成均需重新从网页验证。
 - 从网页上传 WAV 并点击转写，`POST /api/transcribe` 返回 HTTP 404；已验证错误提示，不代表真实识别可用。
 - 网页自动读取 `GET /api/frontend-state/{workspace_id}` 返回 HTTP 404；长期恢复待后端实现，不能宣称已验证成功。
 - 网页 DOCX 正文及表格导入、JSON 备份下载与确认恢复通过。恢复不改变当前 workspace。
@@ -172,6 +181,7 @@ Content-Type: multipart/form-data
 ```
 
 前端支持 WAV、MP3、M4A、OGG、WebM。失败时保留音频和手动文本输入，不影响四智能体接口。
+单文件上限为 50 MB；网关上传限制必须覆盖 multipart 编码开销。无效、超限和不支持格式应返回明确的非 2xx JSON `detail`。
 
 ### 9.2 跨会话内容档案
 
@@ -217,6 +227,8 @@ Content-Type: application/json
 }
 ```
 
+PUT 使用本次 `state` 完整覆盖当前档案，上限 10 MB，禁止静默截断。后端将通过大小限制的 JSON 对象原样保存和返回。
+
 手动清除：
 
 ```text
@@ -230,3 +242,5 @@ DELETE /api/frontend-state/{workspace_id}
   "success": true
 }
 ```
+
+DELETE 建议保持幂等；PUT 和 DELETE 也可使用 HTTP 204 表示成功。
