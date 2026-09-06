@@ -41,6 +41,7 @@ PowerShell 联调示例：
 ```powershell
 $env:STEM_MOCK_MODE = "false"
 $env:STEM_API_BASE = "https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run"
+Remove-Item Env:STEM_API_TOKEN -ErrorAction SilentlyContinue
 streamlit run app.py --server.port 8502
 ```
 
@@ -133,12 +134,12 @@ streamlit run app.py --server.port 8502
 
 回答质量评测由后端侧另行进行。
 
-## 9. 前端扩展接口（待后端同步）
+## 9. 前端扩展接口
 
-### 本轮体验与档案约定（2026-09-02）
+### 本轮体验与档案约定（2026-09-06）
 
 - 路径及 `question` / `agent_type` 不变，不改图谱契约。科研仍是引导填写后一次生成，状态键仍为 `research_pain`。
-- 音频上限 50 MB，先预览转写，再选择替换或追加；最多回填 5,000 字，超长需确认，完整文本可下载。Mock 明确标为示例，不代表实际识别。后端需同步网关限制、超时和五种音频格式支持。
+- 音频上限 30 MB，为阿里云 FC 32 MB 请求 Body 硬限制预留 multipart 编码余量。先预览转写，再选择替换或追加；最多回填 5,000 字，超长需确认，完整文本可下载。
 - TXT / DOCX 上限 10 MB；DOCX 正文 XML 解压后上限 20 MB。表格保留行和单元格分隔，最终仅发送最多 20,000 字纯文本，不上传原文档给智能体。
 - 对话完整保存；智能体请求使用课例摘录（2,400 字）、匹配的诊断结论（1,600 字）、最近 6 条对话（每条最多 900 字）及本轮问题。旧报告不作为新课例证据。
 - 真实请求失败保留问题，Mock 建议单独标注，不计入已发送消息。
@@ -152,16 +153,14 @@ streamlit run app.py --server.port 8502
 - 旧档案缺失新字段时使用默认值；后端需支持业务 state 扩展及容量限制，禁止静默截断。
 - workspace UUID 不是用户认证。公开使用前后端仍需实现档案归属、访问控制和并发写入策略；当前版本不保证多人同时编辑同一档案不会相互覆盖。
 
-#### 本轮联调记录（2026-09-02，仅代表当次环境）
+#### 云端联调基线（2026-09-06）
 
-- Python 3.10.11 / Streamlit 1.61.1 / streamlit-agraph 0.0.45；四文件编译、七页及关键流程 AppTest 通过。
-- 从本机 8502 网页输入研究问题，`education_research` 返回 HTTP 200，完整方案显示正常。
-- 从诊断页发送教师问题，`classroom_diagnosis` 返回 HTTP 200，对话显示正常。
-- 已验证的真实智能体请求仅限上述科研生成和诊断教师对话。课程设计初生成/人工迭代/素养校验、诊断报告、教学模拟以及后端变更后的科研生成均需重新从网页验证。
-- 从网页上传 WAV 并点击转写，`POST /api/transcribe` 返回 HTTP 404；已验证错误提示，不代表真实识别可用。
-- 网页自动读取 `GET /api/frontend-state/{workspace_id}` 返回 HTTP 404；长期恢复待后端实现，不能宣称已验证成功。
+- 云端健康检查返回 HTTP 200：`{"status":"ok","service":"STEM-Agent","version":"1.3.0"}`。
+- 四种 `agent_type` 已分别完成云端冒烟请求，均返回 HTTP 200、匹配的 `agent_type` 和非空 `answer`。
+- 四个业务页面均已从 `localhost:8502` 完成真实云端请求并显示结果：教学模拟、课程设计三阶段、诊断报告与连续追问、科研完整方案均为 HTTP 200。
+- 云端档案 GET / PUT / GET / DELETE / GET 生命周期已通过；页面 PUT 可读回 37 个白名单业务字段，独立新会话可用同一 workspace URL 自动恢复，且未上传音频、文件、Token 或 `_ui_` 临时字段。
+- 音频接口代码已部署，但真实 ASR 凭证尚未配置；HTTP 503 是当前预期，不作为 v1.3.0 部署失败依据。
 - 网页 DOCX 正文及表格导入、JSON 备份下载与确认恢复通过。恢复不改变当前 workspace。
-- 持久化成功、失败、重连、删除等分支使用替身响应测试；未对真实后端执行 DELETE。
 - 本轮不验证四智能体全链路内部的 GraphRAG / LoRA 执行情况，不以回答成功推断这些内部步骤已运行。
 
 ### 9.1 音频转写
@@ -181,11 +180,11 @@ Content-Type: multipart/form-data
 ```
 
 前端支持 WAV、MP3、M4A、OGG、WebM。失败时保留音频和手动文本输入，不影响四智能体接口。
-单文件上限为 50 MB；网关上传限制必须覆盖 multipart 编码开销。无效、超限和不支持格式应返回明确的非 2xx JSON `detail`。
+单文件上限为 30 MB；该限制为 FC 32 MB 请求 Body 留出 multipart 编码余量。无效、超限和不支持格式应返回明确的非 2xx JSON `detail`；ASR 凭证未配置期间允许返回 HTTP 503。
 
 ### 9.2 跨会话内容档案
 
-`workspace_id` 由前端生成，为不包含个人信息的 UUID。状态对象只包含业务输入与生成结果，不包含上传文件、Token 或后端连接状态。
+`workspace_id` 由前端生成，为不包含个人信息的 UUID。合法 URL 参数优先，否则从浏览器 `localStorage` 恢复，不存在时才新建；最终 UUID 同步到 URL、浏览器存储和 Streamlit 会话。状态对象只包含业务输入与生成结果，不包含上传文件、Token 或后端连接状态。
 
 ```text
 GET /api/frontend-state/{workspace_id}
@@ -227,7 +226,7 @@ Content-Type: application/json
 }
 ```
 
-PUT 使用本次 `state` 完整覆盖当前档案，上限 10 MB，禁止静默截断。后端将通过大小限制的 JSON 对象原样保存和返回。
+PUT 使用本次 `state` 完整覆盖当前档案，上限 10 MB，禁止静默截断。后端将通过大小限制的 JSON 对象原样保存和返回。前端档案请求使用 10 秒连接、30 秒读取超时，为云端 FC 冷启动留出余量。
 
 手动清除：
 

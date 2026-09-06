@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Workspace storage</title>
+</head>
+<body>
+<script>
+  const post = (type, payload = {}) => {
+    window.parent.postMessage({isStreamlitMessage: true, type, ...payload}, "*");
+  };
+
+  const setValue = (value) => {
+    post("streamlit:setComponentValue", {value, dataType: "json"});
+  };
+
+  window.addEventListener("message", (event) => {
+    const message = event.data;
+    if (event.source !== window.parent || !message || message.type !== "streamlit:render") return;
+
+    const args = message.args || {};
+    const storageKey = args.storage_key || "stem_teacher_education_workspace_id";
+    const candidate = typeof args.candidate === "string" ? args.candidate : "";
+    let value = candidate;
+
+    try {
+      if (candidate) {
+        window.localStorage.setItem(storageKey, candidate);
+      } else {
+        value = window.localStorage.getItem(storageKey) || "";
+      }
+    } catch (_) {
+      // 隐私模式或浏览器策略禁用 localStorage 时回退为当前会话生成 UUID。
+      value = candidate || "";
+    }
+
+    setValue(value);
+    post("streamlit:setFrameHeight", {height: 0});
+  });
+
+  post("streamlit:componentReady", {apiVersion: 1});
+</script>
+</body>
+</html>

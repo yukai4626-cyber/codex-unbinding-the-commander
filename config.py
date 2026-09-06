@@ -52,6 +52,7 @@ API_TOKEN = (os.getenv("STEM_API_TOKEN") or "").strip()  # 可选 X-Token，不�
 API_CONNECT_TIMEOUT = 10          # 建立连接超时（秒）
 API_READ_TIMEOUT = 180            # 工作流 / GraphRAG / LoRA 生成最长等待（秒）
 API_TIMEOUT = (API_CONNECT_TIMEOUT, API_READ_TIMEOUT)
+PERSISTENCE_TIMEOUT = (10, 30)     # 云端 FC 冷启动与档案读写留出独立余量
 
 # 四个页面语义入口统一映射到稳定契约 POST /api/agent-chat。
 # 保留四个键是为了维持页面架构；真实请求路径和 Body 格式完全一致。
@@ -66,6 +67,8 @@ API_ENDPOINTS = {
 # 后端契约：POST multipart/form-data /api/transcribe，字段名 file；
 # 成功返回 {"text": "转写文本"}。接口未就绪时前端保留音频并允许手动录入。
 TRANSCRIBE_ENDPOINT = "/api/transcribe"
+AUDIO_UPLOAD_MAX_MB = 30
+AUDIO_UPLOAD_MAX_BYTES = AUDIO_UPLOAD_MAX_MB * 1024 * 1024
 
 # 跨会话内容档案接口。workspace_id 是前端生成的随机 UUID，不包含个人信息。
 # GET    /api/frontend-state/{workspace_id} -> {"state": {...}}

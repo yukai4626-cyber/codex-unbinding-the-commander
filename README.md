@@ -26,7 +26,7 @@ streamlit run app.py --server.port 8502
 ```powershell
 $env:STEM_MOCK_MODE = "false"
 $env:STEM_API_BASE = "https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run"
-$env:STEM_API_TOKEN = "测试令牌"
+Remove-Item Env:STEM_API_TOKEN -ErrorAction SilentlyContinue
 streamlit run app.py --server.port 8502
 ```
 
@@ -36,7 +36,9 @@ streamlit run app.py --server.port 8502
 | `STEM_API_BASE` | 否 | 后端基础地址；默认使用当前测试部署地址，不包含 `/api/agent-chat` |
 | `STEM_API_TOKEN` | 否 | 测试令牌；设置后通过请求头 `X-Token` 发送，未设置时不发送该请求头 |
 
-令牌不得写入源码、提交记录、截图或公开日志。公网部署时应使用平台 Secrets/环境变量，并配置后端 HTTPS 地址。
+当前 v1.3.0 云端联调不启用 `X-Token`。后续启用时，令牌不得写入源码、提交记录、截图或公开日志；公网部署应使用平台 Secrets/环境变量。
+
+启动前可访问 <https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run/health>，确认返回 `STEM-Agent`、版本 `1.3.0`。前端仍访问 <http://localhost:8502>，由 Streamlit 服务端请求云端接口，不依赖两台电脑之间的局域网直连。
 
 ---
 
@@ -118,7 +120,7 @@ streamlit run app.py --server.port 8502
 1. 固定 JSON 阶段：先实现一个 `POST /api/agent-chat`，根据四种 `agent_type` 返回非空 `answer` 和原 `agent_type`。
 2. 真实能力阶段：固定回答联调通过后，再逐个接入星辰工作流、GraphRAG、向量检索或 LoRA，保持前端稳定字段不变。
 
-联调顺序固定为：课程工作台 → 智能诊断 → 教学模拟 → 科研孵化 → 音频转写 → 长期档案。后端需提供 BaseURL、是否启用 `X-Token`、测试令牌、启动方法和可联调时间。具体 P0/P1 工作、三类接口示例和联合验收清单见[《后端联调交接清单》](后端联调交接清单.md)。
+云端联调优先验证统一智能体接口和长期档案生命周期；音频转写因真实 ASR 凭证尚未配置，不作为部署成败的首要判断项，HTTP 503 属于当前预期。具体接口示例和联合验收清单见[《后端联调交接清单》](后端联调交接清单.md)。
 
 ---
 

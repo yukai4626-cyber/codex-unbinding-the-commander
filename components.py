@@ -21,11 +21,19 @@ import json
 import math
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as streamlit_components
 import requests
 import config
 from streamlit_agraph import agraph, Node, Edge, Config as AgraphConfig
+
+_WORKSPACE_STORAGE_COMPONENT = streamlit_components.declare_component(
+    "stem_workspace_storage",
+    path=str(Path(__file__).with_name("workspace_storage_component")),
+)
+_WORKSPACE_STORAGE_KEY = "stem_teacher_education_workspace_id"
 
 _ICONS = {
     'activity': '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
@@ -1152,6 +1160,7 @@ def init_session_state():
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
+    _sync_workspace_identity()
     _init_persistent_state()
 
 
@@ -1180,7 +1189,54 @@ def _normalise_workspace_id(value) -> str | None:
         return None
 
 
+def _browser_workspace_id(candidate: str = ""):
+    """读取或更新浏览器 localStorage 中的 workspace UUID。"""
+    return _WORKSPACE_STORAGE_COMPONENT(
+        candidate=candidate,
+        storage_key=_WORKSPACE_STORAGE_KEY,
+        key="workspace_identity",
+        default=None,
+    )
+
+
+def _sync_workspace_identity() -> str:
+    """每轮只渲染一次组件，并将 URL、浏览器和会话中的 UUID 对齐。"""
+    try:
+        query_value = st.query_params.get("workspace")
+    except (AttributeError, KeyError):
+        query_value = None
+    query_id = _normalise_workspace_id(query_value)
+    session_id = _normalise_workspace_id(st.session_state.get("workspace_id"))
+
+    # 显式 workspace 链接优先，便于恢复或切换档案；选中后同步回浏览器。
+    if query_id:
+        st.session_state["workspace_id"] = query_id
+        _browser_workspace_id(query_id)
+        return query_id
+
+    if session_id:
+        _browser_workspace_id(session_id)
+        try:
+            st.query_params["workspace"] = session_id
+        except (AttributeError, KeyError):
+            pass
+        return session_id
+
+    stored_value = _browser_workspace_id()
+    if stored_value is None:
+        # 首次渲染等待组件从浏览器返回；组件回传后 Streamlit 会自动重跑。
+        st.stop()
+    current = _normalise_workspace_id(stored_value) or str(uuid.uuid4())
+    st.session_state["workspace_id"] = current
+    try:
+        st.query_params["workspace"] = current
+    except (AttributeError, KeyError):
+        pass
+    return current
+
+
 def _workspace_id() -> str:
+    """返回初始化完成的 workspace UUID，不重复渲染浏览器组件。"""
     current = _normalise_workspace_id(st.session_state.get("workspace_id"))
     if current:
         return current
@@ -1221,7 +1277,7 @@ def _load_persistent_state(workspace_id: str):
         response = requests.get(
             _persistence_url(workspace_id),
             headers=_persistence_headers(),
-            timeout=(3, 12),
+            timeout=config.PERSISTENCE_TIMEOUT,
         )
     except requests.exceptions.RequestException as exc:
         st.session_state["persistence_error"] = f"连接失败：{type(exc).__name__}"
@@ -1367,7 +1423,7 @@ def _save_persistent_state():
             _persistence_url(workspace_id),
             json={"state": payload},
             headers=_persistence_headers(),
-            timeout=(3, 12),
+            timeout=config.PERSISTENCE_TIMEOUT,
         )
     except requests.exceptions.RequestException:
         st.session_state["persistence_status"] = "保存暂时失败，本次会话内容仍然保留。"
@@ -1435,7 +1491,11 @@ def _clear_saved_content(local_only=False):
             st.session_state["persistence_status"] = "Mock 模式无法删除远端档案，可仅清空本次会话。"
             return
         try:
-            response = requests.delete(_persistence_url(_workspace_id()), headers=_persistence_headers(), timeout=(3, 12))
+            response = requests.delete(
+                _persistence_url(_workspace_id()),
+                headers=_persistence_headers(),
+                timeout=config.PERSISTENCE_TIMEOUT,
+            )
             if not _confirmed_write(response):
                 st.session_state["persistence_status"] = f"删除失败（HTTP {response.status_code} 或响应未确认），内容未清空。"
                 return
@@ -2353,6 +2413,9 @@ def transcribe_audio(filename: str, audio_bytes: bytes, content_type: str = "aud
         return None
     except requests.exceptions.RequestException:
         st.session_state["sim_transcribe_notice"] = "转写失败：网络连接不可用，请重试或手动输入。"
+        return None
+    if resp.status_code == 503:
+        st.session_state["sim_transcribe_notice"] = "ASR 服务暂未配置，请稍后重试或手动输入。"
         return None
     if not 200 <= resp.status_code < 300:
         st.session_state["sim_transcribe_notice"] = f"转写失败：HTTP {resp.status_code}，原授课文字未改变。"

@@ -687,8 +687,8 @@ def _transcribe_sim_audio():
   if uploaded is None:
     return
   audio_bytes = uploaded["data"]
-  if len(audio_bytes) > 50 * 1024 * 1024:
-    st.session_state["sim_transcribe_notice"] = "音频超过 50 MB，请压缩或分段上传。"
+  if len(audio_bytes) > config.AUDIO_UPLOAD_MAX_BYTES:
+    st.session_state["sim_transcribe_notice"] = f"音频超过 {config.AUDIO_UPLOAD_MAX_MB} MB，请压缩或分段上传。"
     return
   transcript = comp.transcribe_audio(uploaded["name"], audio_bytes, uploaded["type"])
 
@@ -730,7 +730,7 @@ def page_simulation(view):
     audio_upload = st.file_uploader(
       "上传授课音频",
       type=["wav", "mp3", "m4a", "ogg", "webm"],
-      max_upload_size=50,
+      max_upload_size=config.AUDIO_UPLOAD_MAX_MB,
       help="上传后可试听；转写调用 POST /api/transcribe，先预览返回的 text，再选择替换或追加。",
       key="sim_audio_upload",
       on_change=_audio_changed,
@@ -738,14 +738,14 @@ def page_simulation(view):
     audio_file = st.session_state.get("sim_audio_file")
     if audio_file is not None:
       audio_bytes = audio_file["data"]
-      st.caption(f"{audio_file['name']} · {len(audio_bytes) / 1024 / 1024:.2f} MB · 上限 50 MB")
+      st.caption(f"{audio_file['name']} · {len(audio_bytes) / 1024 / 1024:.2f} MB · 上限 {config.AUDIO_UPLOAD_MAX_MB} MB")
       st.audio(audio_bytes, format=audio_file["type"] or "audio/wav")
       st.button(
         "转写音频（先预览）",
         width="stretch",
         key="sim_transcribe_btn",
         on_click=_transcribe_sim_audio,
-        disabled=len(audio_bytes) > 50 * 1024 * 1024,
+        disabled=len(audio_bytes) > config.AUDIO_UPLOAD_MAX_BYTES,
       )
     if st.session_state.get("sim_transcribe_notice"):
       st.caption(st.session_state["sim_transcribe_notice"])
