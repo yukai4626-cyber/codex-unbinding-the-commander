@@ -1,7 +1,7 @@
 # STEM教师教育“教-学-研”一体化智能体 · 前端演示 Demo
 
 > 技术栈：Python 3.10.11 + Streamlit 1.61.1 + streamlit-agraph 0.0.45  
-> 定位：可独立演示、可连接真实后端的 Streamlit 前端联调原型  
+> 定位：可独立演示、可连接真实后端的 Streamlit Public Beta
 > 依赖约束：禁止新增第三方库；HTTP 请求使用 Streamlit 已依赖的 `requests`
 
 本项目包含 7 个页面、1 个稳定业务接口和 4 种智能体类型。没有后端时可使用内置 Mock 数据完整演示；后端可用时，可通过环境变量切换到真实接口。真实请求失败会保留输入和已有结果，并停留在原视图显示错误；Mock 仅在用户主动选择后只读展示。
@@ -26,6 +26,9 @@ streamlit run app.py --server.port 8502
 ```powershell
 $env:STEM_MOCK_MODE = "false"
 $env:STEM_API_BASE = "https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run"
+$env:STEM_PERSISTENCE_ENABLED = "false"
+$env:STEM_SESSION_REQUESTS_PER_HOUR = "20"
+$env:STEM_MIN_REQUEST_INTERVAL_SECONDS = "3"
 Remove-Item Env:STEM_API_TOKEN -ErrorAction SilentlyContinue
 streamlit run app.py --server.port 8502
 ```
@@ -35,10 +38,19 @@ streamlit run app.py --server.port 8502
 | `STEM_MOCK_MODE` | 否 | `true` 使用内置 Mock；`false` 请求真实后端；未设置时使用 `config.py` 默认值 |
 | `STEM_API_BASE` | 否 | 后端基础地址；默认使用当前测试部署地址，不包含 `/api/agent-chat` |
 | `STEM_API_TOKEN` | 否 | 测试令牌；设置后通过请求头 `X-Token` 发送，未设置时不发送该请求头 |
+| `STEM_PERSISTENCE_ENABLED` | 否 | 是否启用远端档案；公开测试版默认 `false`，避免把 workspace UUID 当作用户认证 |
+| `STEM_SESSION_REQUESTS_PER_HOUR` | 否 | 每个浏览器会话一小时内最多发起的智能体请求数，默认 `20` |
+| `STEM_MIN_REQUEST_INTERVAL_SECONDS` | 否 | 同一会话两次智能体请求的最短间隔，默认 `3` 秒 |
 
 当前 v1.3.0 云端联调不启用 `X-Token`。后续启用时，令牌不得写入源码、提交记录、截图或公开日志；公网部署应使用平台 Secrets/环境变量。
 
 启动前可访问 <https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run/health>，确认返回 `STEM-Agent`、版本 `1.3.0`。前端仍访问 <http://localhost:8502>，由 Streamlit 服务端请求云端接口，不依赖两台电脑之间的局域网直连。
+
+### 3. Streamlit Community Cloud 公开测试版
+
+部署仓库使用 `main` 分支和 `app.py` 入口。在 Streamlit Cloud 的 Secrets 中设置上述五个 `STEM_*` 变量，其中真实后端模式和关闭远端档案为必需配置。先在私有状态完成冒烟测试，最后再将 App visibility 改为 Public；权限变更后必须用无痕窗口确认网址不再跳转至 `share.streamlit.io/-/auth/app`。
+
+Public Beta 的会话级限频仅用于减少重复点击和普通滥用，用户可以通过新建会话绕过。当前后端未启用 Token 和全局限流，因此这不是正式的费用安全边界；出现异常流量时应立即把应用改回私有或切换 `STEM_MOCK_MODE=true`。
 
 ---
 
@@ -97,6 +109,10 @@ streamlit run app.py --server.port 8502
 
 后端不可达、超时、返回非 JSON、业务报错或字段异常时，前端保留输入、已有结果和业务阶段，停留在发起操作的视图显示错误。存在兜底时，用户可主动进入“查看 Mock 示例”的只读预览；Mock 不覆盖业务数据，也不计作真实成功。Mock 数据只用于功能演示，成果页不得将其描述为真实实证结果。
 
+失败时页面会显示事件编号，并在可用时显示阿里云 `X-Fc-Request-Id` 与经过清洗的 JSON `detail`。Streamlit 日志仅记录事件编号、接口、智能体类型、状态码、耗时、异常类别和请求 ID，不记录用户问题、模型回答、Token、完整响应正文或堆栈中的上游敏感信息。排查时在 **Manage app → Logs** 搜索页面事件编号，再用请求 ID 对照后端日志。
+
+公开测试版默认关闭跨会话远端档案。内容只在当前会话中保留，用户可在“内容管理”下载或导入 JSON 备份。音频转写若返回 HTTP 503，表示真实 ASR 凭证尚未配置，界面应提示手动输入，不计作四种智能体后端故障。
+
 ---
 
 ## 五、设计体系
@@ -132,18 +148,23 @@ streamlit run app.py --server.port 8502
 # 1. 编译
 python -m py_compile config.py components.py pages.py app.py
 
-# 2. AppTest 冒烟
+# 2. 网关单元测试
+python -m unittest discover -s tests -v
+
+# 3. AppTest 冒烟
 # 临时 .py 脚本写入 %TEMP%，运行后删除。
 # 覆盖：7 页 radio 切换；工作台真实编辑和 ws_stage 递进；
 # 工作台向模拟/诊断传递；模拟互动 flow 变化；诊断样例、报告和溯源弹窗；
 # 图谱 6 子域和节点选择；诊断结果带入科研并生成。
 
-# 3. 真实服务
+# 4. 真实服务
 streamlit run app.py --server.headless true --server.port 8502
 # 轮询 /_stcore/health 返回 ok、首页 HTTP 200、日志无 traceback，然后终止本次验证进程。
 ```
 
-接口网关还应通过标准库 mock 覆盖：正常响应、超时、HTTP 500、非 JSON、业务错误、缺字段、非法数值和可选 `X-Token`。TXT 输入覆盖 UTF-8、UTF-8 BOM、GB18030、空文件、乱码及超长内容。
+接口网关还应通过标准库 mock 覆盖：四种正常响应、超时、连接失败、HTTP 4xx/5xx、非 JSON、业务错误、缺字段、类型错配、会话限频、日志脱敏和关闭远端档案后零网络调用。TXT 输入覆盖 UTF-8、UTF-8 BOM、GB18030、空文件、乱码及超长内容。
+
+部署后使用无痕窗口确认首页不触发 Streamlit 登录跳转，再从四个业务页面各发起一次真实请求。发布后观察日志 30 分钟；若无法稳定生成或出现异常流量，先将 App visibility 改回 Private，或将 `STEM_MOCK_MODE` 切换为 `true` 后重启应用。
 
 ---
 

@@ -26,7 +26,7 @@ PROJECT_POSITION = (
     "面向师范生培养的教育AI系统：覆盖教学模拟、智能诊断、课程设计、科研孵化四大业务智能体，"
     "底层依托多源异构动态语义知识图谱提供技术支撑，实现“教-学-研”三位一体的教师全周期培养闭环。"
 )
-VERSION = "v1.0.0 Demo"
+VERSION = "v1.1.0 Public Beta"
 PAGE_ICON = ":material/psychology:"  # Streamlit Material 图标（禁 Emoji）
 
 # ========================= Mock / 后端 =========================
@@ -44,6 +44,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 MOCK_MODE = _env_bool("STEM_MOCK_MODE", True)  # True = 内置 Mock；False = 请求真实后端
+PERSISTENCE_ENABLED = _env_bool(
+    "STEM_PERSISTENCE_ENABLED", False
+)  # 公开测试版默认关闭：workspace UUID 不是用户认证
 API_BASE = (
     (os.getenv("STEM_API_BASE") or "").strip().rstrip("/")
     or "https://stem-agent-gfcqvhpopr.cn-hangzhou.fcapp.run"
@@ -53,6 +56,23 @@ API_CONNECT_TIMEOUT = 10          # 建立连接超时（秒）
 API_READ_TIMEOUT = 180            # 工作流 / GraphRAG / LoRA 生成最长等待（秒）
 API_TIMEOUT = (API_CONNECT_TIMEOUT, API_READ_TIMEOUT)
 PERSISTENCE_TIMEOUT = (10, 30)     # 云端 FC 冷启动与档案读写留出独立余量
+
+
+def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    """读取有限范围整数；非法或越界配置回退安全默认值。"""
+    try:
+        value = int((os.getenv(name) or "").strip())
+    except (TypeError, ValueError):
+        return default
+    return value if minimum <= value <= maximum else default
+
+
+SESSION_REQUESTS_PER_HOUR = _env_int(
+    "STEM_SESSION_REQUESTS_PER_HOUR", 20, 1, 1000
+)
+MIN_REQUEST_INTERVAL_SECONDS = _env_int(
+    "STEM_MIN_REQUEST_INTERVAL_SECONDS", 3, 0, 300
+)
 
 # 四个页面语义入口统一映射到稳定契约 POST /api/agent-chat。
 # 保留四个键是为了维持页面架构；真实请求路径和 Body 格式完全一致。

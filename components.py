@@ -18,7 +18,10 @@
 import copy
 import html
 import json
+import logging
 import math
+import re
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +37,7 @@ _WORKSPACE_STORAGE_COMPONENT = streamlit_components.declare_component(
     path=str(Path(__file__).with_name("workspace_storage_component")),
 )
 _WORKSPACE_STORAGE_KEY = "stem_teacher_education_workspace_id"
+_BACKEND_LOGGER = logging.getLogger("stem.backend")
 
 _ICONS = {
     'activity': '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
@@ -1157,6 +1161,9 @@ def init_session_state():
         "kg_domain": "all",                      # 当前图谱子域（all=全局总览）
         # ---- 后端连接状态 ----
         "backend_status": None,                  # ("ok"|"down"|"bad_response", 详情)
+        "backend_incident": None,                # 最近一次失败的安全诊断信息，不持久化
+        "backend_request_times": [],             # 当前会话的滚动限频时间戳，不持久化
+        "backend_request_started_at": None,      # 防止同一会话并发发起生成请求
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -1273,6 +1280,9 @@ def _persistent_payload() -> dict:
 
 
 def _load_persistent_state(workspace_id: str):
+    if not config.PERSISTENCE_ENABLED:
+        st.session_state["persistence_error"] = "远端档案已按公开测试版安全策略关闭。"
+        return None
     try:
         response = requests.get(
             _persistence_url(workspace_id),
@@ -1404,6 +1414,10 @@ def _restore_persistent_state(state: dict):
 
 
 def _save_persistent_state():
+    if not config.PERSISTENCE_ENABLED:
+        st.session_state["persistence_available"] = False
+        st.session_state["persistence_status"] = "公开测试版：内容仅保留在当前会话，请及时下载备份。"
+        return False
     if not st.session_state.get("persistence_available"):
         return False
     workspace_id = _workspace_id()
@@ -1440,6 +1454,10 @@ def _init_persistent_state():
     workspace_id = _workspace_id()
     if not st.session_state.get("persistence_checked"):
         st.session_state["persistence_checked"] = True
+        if not config.PERSISTENCE_ENABLED:
+            st.session_state["persistence_available"] = False
+            st.session_state["persistence_status"] = "公开测试版：内容仅保留在当前会话，请及时下载备份。"
+            return
         if config.MOCK_MODE:
             st.session_state["persistence_available"] = False
             st.session_state["persistence_status"] = "Mock 模式：当前会话自动保留。"
@@ -1486,6 +1504,8 @@ def _reset_business():
 
 
 def _clear_saved_content(local_only=False):
+    if not config.PERSISTENCE_ENABLED:
+        local_only = True
     if not local_only:
         if config.MOCK_MODE:
             st.session_state["persistence_status"] = "Mock 模式无法删除远端档案，可仅清空本次会话。"
@@ -1508,11 +1528,18 @@ def _clear_saved_content(local_only=False):
     st.query_params["workspace"] = st.session_state["workspace_id"]
     st.session_state["persistence_available"] = False
     st.session_state["persistence_checked"] = True
-    st.session_state["persistence_status"] = "已清空本次会话，旧远端档案未修改。" if local_only else "已确认删除远端档案并清空本次会话。"
+    if not config.PERSISTENCE_ENABLED:
+        st.session_state["persistence_status"] = "已清空本次会话；远端档案功能当前关闭。"
+    else:
+        st.session_state["persistence_status"] = "已清空本次会话，旧远端档案未修改。" if local_only else "已确认删除远端档案并清空本次会话。"
 
 
 def _retry_persistence():
     st.session_state.pop("persistence_attempted", None)
+    if not config.PERSISTENCE_ENABLED:
+        st.session_state["persistence_available"] = False
+        st.session_state["persistence_status"] = "公开测试版已关闭远端档案；请使用 JSON 备份导入导出。"
+        return
     if config.MOCK_MODE:
         st.session_state["persistence_status"] = "Mock 模式仅保留当前会话，请下载备份。"
         return
@@ -1532,6 +1559,9 @@ def _retry_persistence():
 
 
 def _resolve_remote(restore):
+    if not config.PERSISTENCE_ENABLED:
+        st.session_state["persistence_status"] = "远端档案已关闭，未执行覆盖操作。"
+        return
     remote = st.session_state.pop("persistence_remote_pending", {})
     if restore:
         _reset_business()
@@ -1550,7 +1580,7 @@ def _import_backup():
         state = parse_backup(uploaded["data"])
         _reset_business()
         _restore_persistent_state(state)
-        st.session_state["persistence_status"] = "备份已导入当前档案；待同步远端。" if st.session_state.get("persistence_available") else "备份已恢复；仅当前会话保留，长期保存尚未连接。"
+        st.session_state["persistence_status"] = "备份已导入当前档案；待同步远端。" if st.session_state.get("persistence_available") else "备份已恢复；仅当前会话保留，请按需重新下载备份。"
     except (ValueError, RecursionError) as exc:
         st.session_state["persistence_status"] = f"导入失败，原内容未改变：{exc}"
 
@@ -1565,16 +1595,19 @@ def persistence_controls():
             f'<div class="dsh-flow-status">{icon("bookmark", 14)} {status}</div>',
             unsafe_allow_html=True,
         )
-        if st.session_state.get("persistence_error"):
+        if config.PERSISTENCE_ENABLED and st.session_state.get("persistence_error"):
             st.caption("长期保存连接详情：" + st.session_state["persistence_error"])
-        st.caption("只有确认远端保存成功后，才能用同一完整网址恢复。尚未提交的输入不保证已保存，请失焦或按 Ctrl+Enter 提交。")
-        st.caption("完整 workspace 链接可能允许访问档案，请勿公开分享含真实课堂资料的链接。原始音频与文档不进入档案。")
-        st.code(workspace_id, language=None)
-        st.button("重试连接与保存", on_click=_retry_persistence, key="persistence_retry")
-        if st.session_state.get("persistence_remote_pending") is not None:
-            st.warning("远端已有档案。请先下载本次备份，再选择要保留的内容。")
-            st.button("恢复远端内容（覆盖本次）", on_click=_resolve_remote, args=(True,))
-            st.button("保留本次内容（覆盖远端）", on_click=_resolve_remote, args=(False,))
+        if config.PERSISTENCE_ENABLED:
+            st.caption("只有确认远端保存成功后，才能用同一完整网址恢复。尚未提交的输入不保证已保存，请失焦或按 Ctrl+Enter 提交。")
+            st.caption("完整 workspace 链接可能允许访问档案，请勿公开分享含真实课堂资料的链接。原始音频与文档不进入档案。")
+            st.code(workspace_id, language=None)
+            st.button("重试连接与保存", on_click=_retry_persistence, key="persistence_retry")
+            if st.session_state.get("persistence_remote_pending") is not None:
+                st.warning("远端已有档案。请先下载本次备份，再选择要保留的内容。")
+                st.button("恢复远端内容（覆盖本次）", on_click=_resolve_remote, args=(True,))
+                st.button("保留本次内容（覆盖远端）", on_click=_resolve_remote, args=(False,))
+        else:
+            st.caption("为避免公开链接被用于读取或覆盖课堂档案，远端保存暂时关闭；当前会话内容可导出为 JSON 后恢复。")
         st.download_button("下载完整 JSON 备份", backup_bytes(), file_name="stem-workspace.json", mime="application/json", key="backup_download")
         st.file_uploader("导入 JSON 备份（最多 10 MB）", type=["json"], max_upload_size=10, key="backup_upload", on_change=_backup_changed)
         if st.session_state.get("backup_file"):
@@ -1583,15 +1616,18 @@ def persistence_controls():
         st.button("确认导入备份", disabled=not (import_confirmed and st.session_state.get("backup_file")), on_click=_import_backup)
         st.divider()
         confirmed = draft_widget("checkbox", "我确认清除内容，已自行下载需要的备份", key="persistence_confirm_clear")
-        st.button(
-            "清除全部已保存内容",
-            type="secondary",
-            width="stretch",
-            on_click=_clear_saved_content,
-            key="persistence_clear_all",
-            disabled=not confirmed,
-        )
-        st.button("仅清空本次会话（保留旧远端档案）", on_click=_clear_saved_content, args=(True,), disabled=not confirmed, key="persistence_clear_local")
+        if config.PERSISTENCE_ENABLED:
+            st.button(
+                "清除全部已保存内容",
+                type="secondary",
+                width="stretch",
+                on_click=_clear_saved_content,
+                key="persistence_clear_all",
+                disabled=not confirmed,
+            )
+            st.button("仅清空本次会话（保留旧远端档案）", on_click=_clear_saved_content, args=(True,), disabled=not confirmed, key="persistence_clear_local")
+        else:
+            st.button("清空本次会话", type="secondary", width="stretch", on_click=_clear_saved_content, args=(True,), disabled=not confirmed, key="persistence_clear_local")
 
 
 # =====================================================================
@@ -1848,13 +1884,16 @@ def backend_badge():
                 f'后端已连接 · 真实数据（{safe_text(status[1])}）</span>')
     elif status[0] == "bad_response":
         html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#D13438; border:1px solid #00000014;">'
-                f'后端响应异常（{safe_text(status[1])}）· 已回退 Mock</span>')
+                f'后端响应异常（{safe_text(status[1])}）</span>')
     elif status[0] == "bad_request":
         html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#D13438; border:1px solid #00000014;">'
-                '前端请求格式异常 · 已回退 Mock</span>')
+                '前端请求格式异常</span>')
+    elif status[0] == "rate_limited":
+        html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#7D630C; border:1px solid #00000014;">'
+                f'请求已限频（{safe_text(status[1])}）</span>')
     else:
         html = ('<span class="dsh-badge" style="background:#ffffffd9; color:#7D630C; border:1px solid #00000014;">'
-                '后端不可用 · 已回退 Mock 兜底</span>')
+                '后端不可用 · 输入已保留</span>')
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -2291,9 +2330,14 @@ def _clean_research_response(data, mock_result):
     return cleaned, issues
 
 
-def _clean_agent_sources(value):
-    """兼容未来的 sources / graph_sources；仅接收数组，不猜测内部结构。"""
-    return copy.deepcopy(value) if isinstance(value, list) else []
+def _clean_agent_sources(value, field: str, issues: list[str]):
+    """可选来源字段存在时必须是非空字符串数组。"""
+    if value is None:
+        return []
+    if isinstance(value, list) and all(_valid_text(item) for item in value):
+        return [item.strip() for item in value]
+    issues.append(field)
+    return []
 
 
 def _clean_agent_chat_response(data: dict, payload: dict):
@@ -2310,13 +2354,116 @@ def _clean_agent_chat_response(data: dict, payload: dict):
         issues.append("agent_type mismatch")
     if issues:
         return None, issues
-    return {
+    cleaned = {
         "answer": answer.strip(),
         "agent_type": actual_type,
-        "sources": _clean_agent_sources(data.get("sources")),
-        "graph_sources": _clean_agent_sources(data.get("graph_sources")),
-        "_real_response": True,
-    }, []
+        "sources": _clean_agent_sources(data.get("sources"), "sources", issues),
+        "graph_sources": _clean_agent_sources(data.get("graph_sources"), "graph_sources", issues),
+    }
+    if issues:
+        return None, issues
+    cleaned["_real_response"] = True
+    return cleaned, []
+
+
+def _safe_remote_text(value, limit: int = 240) -> str:
+    """仅保留可展示的单行远端摘要，避免回显 HTML、控制字符或大段上游内容。"""
+    if not isinstance(value, str):
+        return ""
+    compact = re.sub(r"[\x00-\x1f\x7f]+", " ", value)
+    compact = re.sub(r"\s+", " ", compact).strip()
+    if not compact or "<html" in compact.lower() or "<!doctype" in compact.lower():
+        return ""
+    return compact if len(compact) <= limit else compact[: limit - 1] + "…"
+
+
+def _response_request_id(response) -> str:
+    try:
+        value = response.headers.get("X-Fc-Request-Id", "")
+    except (AttributeError, TypeError):
+        value = ""
+    return _safe_remote_text(value, 100)
+
+
+def _response_error_detail(response) -> str:
+    try:
+        data = response.json()
+    except (AttributeError, ValueError):
+        return ""
+    return _safe_remote_text(data.get("detail")) if isinstance(data, dict) else ""
+
+
+def _record_backend_failure(
+    state: str,
+    kind: str,
+    *,
+    endpoint: str,
+    agent_type: str,
+    elapsed_ms: int,
+    status_code=None,
+    request_id: str = "",
+    detail: str = "",
+):
+    incident_id = uuid.uuid4().hex[:10].upper()
+    incident = {
+        "incident_id": incident_id,
+        "kind": kind,
+        "endpoint": endpoint,
+        "agent_type": agent_type,
+        "elapsed_ms": elapsed_ms,
+        "status_code": status_code,
+        "request_id": request_id,
+        "detail": detail,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+    }
+    st.session_state["backend_incident"] = incident
+    parts = [detail or kind]
+    if request_id:
+        parts.append(f"请求 ID {request_id}")
+    parts.append(f"事件 {incident_id}")
+    _set_backend_status(state, " · ".join(parts))
+    _BACKEND_LOGGER.warning(
+        "backend_request_failed incident=%s endpoint=%s agent_type=%s status=%s "
+        "elapsed_ms=%s kind=%s request_id=%s",
+        incident_id,
+        endpoint,
+        agent_type,
+        status_code if status_code is not None else "-",
+        elapsed_ms,
+        kind,
+        request_id or "-",
+    )
+    return incident
+
+
+def _begin_backend_request(now: float | None = None) -> str:
+    """占用会话请求槽；返回空串表示允许，否则返回可展示的限频原因。"""
+    current = time.time() if now is None else now
+    started = st.session_state.get("backend_request_started_at")
+    stale_after = sum(config.API_TIMEOUT) + 15
+    if isinstance(started, (int, float)) and current - started < stale_after:
+        return "已有智能体请求正在处理，请等待完成后再试"
+
+    raw_times = st.session_state.get("backend_request_times", [])
+    recent = [
+        float(item) for item in raw_times
+        if isinstance(item, (int, float)) and 0 <= current - float(item) < 3600
+    ]
+    st.session_state["backend_request_times"] = recent
+    if recent and current - recent[-1] < config.MIN_REQUEST_INTERVAL_SECONDS:
+        remaining = math.ceil(config.MIN_REQUEST_INTERVAL_SECONDS - (current - recent[-1]))
+        return f"请求过于频繁，请 {remaining} 秒后重试"
+    if len(recent) >= config.SESSION_REQUESTS_PER_HOUR:
+        return f"本会话每小时最多请求 {config.SESSION_REQUESTS_PER_HOUR} 次，请稍后再试"
+
+    recent.append(current)
+    st.session_state["backend_request_times"] = recent
+    st.session_state["backend_request_started_at"] = current
+    return ""
+
+
+def _finish_backend_request():
+    st.session_state["backend_request_started_at"] = None
 
 
 def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"):
@@ -2342,6 +2489,18 @@ def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"
         _set_backend_status("bad_request", "前端请求格式错误")
         return _mock_copy(mock_result)
 
+    rate_limit_error = _begin_backend_request()
+    if rate_limit_error:
+        _record_backend_failure(
+            "rate_limited",
+            "请求受限",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=0,
+            detail=rate_limit_error,
+        )
+        return _mock_copy(mock_result)
+
     request_body = {
         "question": question.strip(),
         "agent_type": agent_type,
@@ -2350,28 +2509,91 @@ def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"
     request_kwargs = {"json": request_body, "timeout": config.API_TIMEOUT}
     if config.API_TOKEN:
         request_kwargs["headers"] = {"X-Token": config.API_TOKEN}
+    started_at = time.perf_counter()
     try:
         with st.spinner("智能体正在检索知识并生成回答……"):
             resp = requests.request(method, url, **request_kwargs)
-    except requests.exceptions.RequestException as e:
-        _set_backend_status("down", type(e).__name__)
+    except requests.exceptions.Timeout:
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+        _record_backend_failure(
+            "down",
+            "请求超时",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            detail="后端响应超时，请稍后重试",
+        )
         return _mock_copy(mock_result)
+    except requests.exceptions.RequestException as e:
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+        _record_backend_failure(
+            "down",
+            type(e).__name__,
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            detail="无法连接后端服务，请稍后重试",
+        )
+        return _mock_copy(mock_result)
+    finally:
+        _finish_backend_request()
+
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+    request_id = _response_request_id(resp)
 
     if not 200 <= resp.status_code < 300:
-        _set_backend_status("bad_response", f"HTTP {resp.status_code}")
+        remote_detail = _response_error_detail(resp)
+        _record_backend_failure(
+            "bad_response",
+            f"HTTP {resp.status_code}",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            status_code=resp.status_code,
+            request_id=request_id,
+            detail=(f"HTTP {resp.status_code}：{remote_detail}" if remote_detail else f"后端返回 HTTP {resp.status_code}"),
+        )
         return _mock_copy(mock_result)
 
     try:
         data = resp.json()
     except ValueError:
-        _set_backend_status("bad_response", f"HTTP {resp.status_code} · 非 JSON")
+        _record_backend_failure(
+            "bad_response",
+            "响应不是 JSON",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            status_code=resp.status_code,
+            request_id=request_id,
+            detail="后端返回了无法解析的数据",
+        )
         return _mock_copy(mock_result)
 
     if not isinstance(data, dict):
-        _set_backend_status("bad_response", f"HTTP {resp.status_code} · 响应不是对象")
+        _record_backend_failure(
+            "bad_response",
+            "响应不是对象",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            status_code=resp.status_code,
+            request_id=request_id,
+            detail="后端响应格式不符合接口约定",
+        )
         return _mock_copy(mock_result)
     if data.get("error") or data.get("success") is False:
-        _set_backend_status("bad_response", f"HTTP {resp.status_code} · 业务错误")
+        remote_detail = _safe_remote_text(data.get("detail"))
+        _record_backend_failure(
+            "bad_response",
+            "业务错误",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            status_code=resp.status_code,
+            request_id=request_id,
+            detail=remote_detail or "后端报告业务处理失败",
+        )
         return _mock_copy(mock_result)
 
     cleaned, issues = _clean_agent_chat_response(data, request_body)
@@ -2379,9 +2601,27 @@ def api_gate(endpoint: str, payload=None, mock_result=None, method: str = "POST"
         summary = ", ".join(dict.fromkeys(issues))
         if len(summary) > 100:
             summary = summary[:97] + "..."
-        _set_backend_status("bad_response", f"HTTP {resp.status_code} · 契约字段异常 {summary}")
+        _record_backend_failure(
+            "bad_response",
+            "契约字段异常",
+            endpoint=endpoint,
+            agent_type=agent_type,
+            elapsed_ms=elapsed_ms,
+            status_code=resp.status_code,
+            request_id=request_id,
+            detail=f"后端响应字段异常：{summary}",
+        )
         return _mock_copy(mock_result)
-    _set_backend_status("ok", f"HTTP {resp.status_code}")
+    st.session_state["backend_incident"] = None
+    _set_backend_status("ok", f"HTTP {resp.status_code} · {elapsed_ms / 1000:.1f} 秒")
+    _BACKEND_LOGGER.info(
+        "backend_request_ok endpoint=%s agent_type=%s status=%s elapsed_ms=%s request_id=%s",
+        endpoint,
+        agent_type,
+        resp.status_code,
+        elapsed_ms,
+        request_id or "-",
+    )
     return cleaned
 
 
