@@ -1427,6 +1427,25 @@ def _apply_itrs_stem(res, fallback_itrs, fallback_stem):
     st.session_state["ws_stem"] = fallback_stem
 
 
+def _call_workbench_agent(question, compact_question, mock_res):
+  """课程设计长生成遇到网关 502/503 时，以精炼版本自动重试一次。"""
+  endpoint = config.API_ENDPOINTS["workbench_design"]
+  res = comp.api_gate(endpoint, _agent_payload("workbench_design", question), mock_result=mock_res)
+  if comp.is_agent_response(res):
+    return res
+
+  incident = st.session_state.get("backend_incident")
+  retryable = isinstance(incident, dict) and incident.get("status_code") in (502, 503)
+  if not retryable or config.MOCK_MODE:
+    return res
+
+  res = comp.api_gate(endpoint, _agent_payload("workbench_design", compact_question), mock_result=mock_res)
+  if comp.is_agent_response(res):
+    state, detail = st.session_state.get("backend_status", ("ok", ""))
+    st.session_state["backend_status"] = (state, f"{detail} · 已自动改用精炼生成")
+  return res
+
+
 def _workbench_action(action):
   grade, topic, hours = _workbench_context_values()
   current_context = _ws_context(grade, topic, hours)
@@ -1443,15 +1462,17 @@ def _workbench_action(action):
         "conclusion": None,
       }
       question = (
-        "请作为 STEM 教学设计智能体，生成一份可直接编辑的完整 Markdown 教案。"
-        "教案应包含教学目标、跨学科概念、项目任务、课堂活动、支架和评价方案。\n"
+        "请作为 STEM 教学设计智能体，生成一份可直接编辑的 Markdown 教案提纲。"
+        "教案应包含教学目标、跨学科概念、项目任务、逐课时课堂活动、支架和评价方案；"
+        "内容精炼，控制在 1200 个汉字以内。\n"
         f"学段：{grade}\n主题：{topic}\n课时：{hours}"
       )
-      res = comp.api_gate(
-        config.API_ENDPOINTS["workbench_design"],
-        _agent_payload("workbench_design", question),
-        mock_result=mock_res,
+      compact_question = (
+        "请生成精炼的 STEM Markdown 教案提纲，包含目标、任务、逐课时活动、支架和评价，"
+        "控制在 800 个汉字以内。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}"
       )
+      res = _call_workbench_agent(question, compact_question, mock_res)
       if not comp.accept_result("04", res, "prepare" if action == "generate" else "editor", "assessment" if action == "check" else "editor"):
         return
       if not isinstance(res, dict):
@@ -1473,14 +1494,16 @@ def _workbench_action(action):
       }
       question = (
         "请作为 STEM 教学设计智能体，优化下面这份人工编辑后的教案。"
-        "请保留合理内容，修复跨学科融合与活动衔接问题，并返回完整修订版 Markdown 教案。\n"
-        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
+        "请保留合理内容，修复跨学科融合与活动衔接问题，并返回 Markdown 修订版；"
+        "控制在 1500 个汉字以内。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:8000]}"
       )
-      res = comp.api_gate(
-        config.API_ENDPOINTS["workbench_design"],
-        _agent_payload("workbench_design", question),
-        mock_result=mock_res,
+      compact_question = (
+        "请精炼优化以下 STEM 教案，保留目标、逐课时活动、支架和评价，返回 Markdown，"
+        "控制在 900 个汉字以内。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:5000]}"
       )
+      res = _call_workbench_agent(question, compact_question, mock_res)
       if not comp.accept_result("04", res, "prepare" if action == "generate" else "editor", "assessment" if action == "check" else "editor"):
         return
       if not isinstance(res, dict):
@@ -1502,14 +1525,15 @@ def _workbench_action(action):
       question = (
         "请作为 STEM 教学设计智能体，对下面教案进行素养对齐校验。"
         "请从科学思维、数学建模、工程实践、技术应用、社会责任等方面给出证据、"
-        "不足和改进建议，最后给出总体结论。\n"
-        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:20000]}"
+        "不足和改进建议，最后给出总体结论；控制在 1200 个汉字以内。\n"
+        f"学段：{grade}\n主题：{topic}\n课时：{hours}\n\n当前教案：\n{cur[:8000]}"
       )
-      res = comp.api_gate(
-        config.API_ENDPOINTS["workbench_design"],
-        _agent_payload("workbench_design", question),
-        mock_result=mock_res,
+      compact_question = (
+        "请简要校验以下 STEM 教案的科学思维、数学建模、工程实践、技术应用和社会责任，"
+        "列出证据、不足、建议与结论，控制在 800 个汉字以内。\n\n"
+        f"当前教案：\n{cur[:5000]}"
       )
+      res = _call_workbench_agent(question, compact_question, mock_res)
       if not comp.accept_result("04", res, "prepare" if action == "generate" else "editor", "assessment" if action == "check" else "editor"):
         return
       if not isinstance(res, dict):
