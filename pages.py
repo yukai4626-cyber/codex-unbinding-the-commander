@@ -1270,36 +1270,34 @@ def page_diagnosis(view):
       source = st.session_state["diag_generated_source"] or "课例文本"
       st.caption(f"报告来源：{source} · 已缓存，页面切换不会重复请求")
       st.caption(rep.get("meta", ""))
-      evidence_column, insight_column = st.columns([1.7, .8], gap="large")
-      with evidence_column:
-        comp.section_title("问题与课堂证据")
-        for p in rep["problems"]:
-          comp.info_card(
-            f'{comp.safe_text(p.get("id", "?"))} {comp.safe_text(p.get("title", ""))}',
-            [f'<b>证据</b>：{comp.safe_text(p.get("evidence", ""))}',
-             f'<b>反向归因</b>：{comp.safe_text(p.get("cause", ""))}',
-             f'<b>改进建议</b>：{comp.safe_text(p.get("suggest", ""))}'],
-            icon_name="triangle-alert", tone=config.COLORS["danger"],
-          )
-          comp.tag(
-            f'理论锚点：{comp.safe_text(p.get("anchor", ""))}',
-            color=config.NODE_TYPES["理论"],
-          )
-        if rep.get("suggests"):
-          comp.section_title("改进建议清单")
-          for i, suggestion in enumerate(rep.get("suggests", []), start=1):
-            st.write(f"{i}. {suggestion}")
-      with insight_column:
-        comp.section_title("归因与溯源")
+      comp.section_title("问题与课堂证据")
+      for p in rep["problems"]:
         comp.info_card(
-          "反向归因结论",
-          [comp.safe_text(rep.get("conclusion", ""))],
-          icon_name="route", tone=config.COLORS["primary"],
+          f'{comp.safe_text(p.get("id", "?"))} {comp.safe_text(p.get("title", ""))}',
+          [f'<b>证据</b>：{comp.safe_text(p.get("evidence", ""))}',
+           f'<b>反向归因</b>：{comp.safe_text(p.get("cause", ""))}',
+           f'<b>改进建议</b>：{comp.safe_text(p.get("suggest", ""))}'],
+          icon_name="triangle-alert", tone=config.COLORS["danger"],
         )
-        _render_agent_sources(rep)
-        if st.session_state.get("diag_trace"):
-          if st.button("查看问题、理论与案例溯源", key="diag_trace_btn", width="stretch"):
-            _trace_dialog()
+        comp.tag(
+          f'理论锚点：{comp.safe_text(p.get("anchor", ""))}',
+          color=config.NODE_TYPES["理论"],
+        )
+      if rep.get("suggests"):
+        comp.section_title("改进建议清单")
+        for i, suggestion in enumerate(rep.get("suggests", []), start=1):
+          st.write(f"{i}. {suggestion}")
+
+      comp.section_title("归因与溯源")
+      comp.info_card(
+        "反向归因结论",
+        [comp.safe_text(rep.get("conclusion", ""))],
+        icon_name="route", tone=config.COLORS["primary"],
+      )
+      _render_agent_sources(rep)
+      if st.session_state.get("diag_trace"):
+        if st.button("查看问题、理论与案例溯源", key="diag_trace_btn", width="stretch"):
+          _trace_dialog()
 
 
 @st.dialog("图谱溯源 · 问题、理论与案例", width="large")
