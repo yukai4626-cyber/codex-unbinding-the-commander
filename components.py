@@ -819,6 +819,8 @@ WORKSPACE_CSS = """<style>
 .st-key-page_content .dsh-info { padding:14px 0; border-bottom:1px solid rgba(91,74,58,.18); }
 .st-key-page_content .dsh-info-line, .st-key-page_content .dsh-info-title, .st-key-page_content .dsh-bubble-body { font-size:16px; line-height:1.7; }
 .st-key-page_content .dsh-info-line, .st-key-page_content .dsh-bubble-body { color:#4A3D31; }
+.st-key-page_content .dsh-info-line b,
+.st-key-page_content .dsh-info-line strong { color:#4A3D31; }
 .st-key-page_content .dsh-info-title { color:#2F261F; font-size:17px; line-height:1.5; }
 .st-key-page_content .dsh-info-light { background:#F1EBE2; padding:16px; color:#3A3129; border-radius:8px; }
 .st-key-page_content .dsh-info-light *, .st-key-page_content input, .st-key-page_content textarea,
