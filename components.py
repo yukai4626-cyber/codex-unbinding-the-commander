@@ -30,7 +30,6 @@ import streamlit as st
 import streamlit.components.v1 as streamlit_components
 import requests
 import config
-from streamlit_agraph import agraph, Node, Edge, Config as AgraphConfig
 
 _WORKSPACE_STORAGE_COMPONENT = streamlit_components.declare_component(
     "stem_workspace_storage",
@@ -1169,7 +1168,10 @@ def init_session_state():
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
-    _sync_workspace_identity()
+    workspace_id = _sync_workspace_identity()
+    if workspace_id is None and config.PERSISTENCE_ENABLED:
+        # 等浏览器确认工作区后，再恢复可能覆盖当前页面和输入的远端档案。
+        st.stop()
     _init_persistent_state()
 
 
@@ -1208,7 +1210,7 @@ def _browser_workspace_id(candidate: str = ""):
     )
 
 
-def _sync_workspace_identity() -> str:
+def _sync_workspace_identity() -> str | None:
     """每轮只渲染一次组件，并将 URL、浏览器和会话中的 UUID 对齐。"""
     try:
         query_value = st.query_params.get("workspace")
@@ -1233,8 +1235,8 @@ def _sync_workspace_identity() -> str:
 
     stored_value = _browser_workspace_id()
     if stored_value is None:
-        # 首次渲染等待组件从浏览器返回；组件回传后 Streamlit 会自动重跑。
-        st.stop()
+        # 组件回传后 Streamlit 会自动重跑；关闭远端档案时可先渲染页面。
+        return None
     current = _normalise_workspace_id(stored_value) or str(uuid.uuid4())
     st.session_state["workspace_id"] = current
     try:
@@ -1453,7 +1455,6 @@ def _save_persistent_state():
 
 
 def _init_persistent_state():
-    workspace_id = _workspace_id()
     if not st.session_state.get("persistence_checked"):
         st.session_state["persistence_checked"] = True
         if not config.PERSISTENCE_ENABLED:
@@ -1464,7 +1465,7 @@ def _init_persistent_state():
             st.session_state["persistence_available"] = False
             st.session_state["persistence_status"] = "Mock 模式：当前会话自动保留。"
             return
-        restored = _load_persistent_state(workspace_id)
+        restored = _load_persistent_state(_workspace_id())
         if restored is None:
             st.session_state["persistence_available"] = False
             st.session_state["persistence_status"] = "长期保存接口待后端同步；当前会话内容仍会保留。"
@@ -1589,7 +1590,6 @@ def _import_backup():
 
 def persistence_controls():
     """全局档案状态和手动清除入口；保持侧边栏结构不变。"""
-    workspace_id = _workspace_id()
     with st.container(key="persistence_panel"):
         section_title("内容管理", "管理所有页面的同一份档案")
         status = safe_text(st.session_state.get("persistence_status", "当前会话自动保留。"))
@@ -1602,7 +1602,7 @@ def persistence_controls():
         if config.PERSISTENCE_ENABLED:
             st.caption("只有确认远端保存成功后，才能用同一完整网址恢复。尚未提交的输入不保证已保存，请失焦或按 Ctrl+Enter 提交。")
             st.caption("完整 workspace 链接可能允许访问档案，请勿公开分享含真实课堂资料的链接。原始音频与文档不进入档案。")
-            st.code(workspace_id, language=None)
+            st.code(_workspace_id(), language=None)
             st.button("重试连接与保存", on_click=_retry_persistence, key="persistence_retry")
             if st.session_state.get("persistence_remote_pending") is not None:
                 st.warning("远端已有档案。请先下载本次备份，再选择要保留的内容。")
@@ -1964,6 +1964,8 @@ def render_kg(nodes, edges, height=540, key="kg", hierarchical=False, direction=
     if not nodes:
         st.info("当前子域暂无图谱数据。")
         return
+
+    from streamlit_agraph import Config as AgraphConfig, Edge, Node, agraph
 
     degree = {}
     for e in edges:
